@@ -52,14 +52,17 @@ const GrittyFleet = (() => {
       <div class="gf-bar">
         <button type="button" class="gf-back" hidden>‹ Fleet</button>
         <div class="gf-title"><h2>The Fleet</h2><span class="gf-sub"></span></div>
+        <button type="button" class="gf-names-btn" aria-pressed="false">Names</button>
         <label class="gf-choice">Crew click opens
           <select>${['ask', ...CHOICES.map(c => c[0])].map(v => `<option value="${v}">${v === 'ask' ? 'Ask each time' : CHOICES.find(c => c[0] === v)[1]}</option>`).join('')}</select>
         </label>
       </div>
-      <div class="gf-stage"><canvas width="${W}" height="${H}" aria-hidden="true"></canvas><div class="gf-hot"></div>
+      <div class="gf-stage" tabindex="0" aria-label="Drag to look around. Scroll, pinch or use the plus and minus buttons to zoom.">
+        <div class="gf-cam"><canvas width="${W}" height="${H}" aria-hidden="true"></canvas><div class="gf-hot"></div></div>
+        <div class="gf-zoom"><button type="button" data-zoom="out" aria-label="Zoom out">−</button><button type="button" data-zoom="in" aria-label="Zoom in">+</button><button type="button" data-zoom="fit">Fit</button></div>
+        <p class="gf-status" role="status" aria-live="polite"></p>
         <div class="gf-pop" role="dialog" aria-label="Open crew member" hidden></div></div>
-      <div class="gf-list"></div>
-      <p class="gf-status" role="status" aria-live="polite"></p>`;
+      <div class="gf-list"></div>`;
     const $ = s => root.querySelector(s);
     const cv = $('canvas'), g = cv.getContext('2d'), hot = $('.gf-hot'), list = $('.gf-list'), pop = $('.gf-pop'), statusEl = $('.gf-status');
     const select = $('.gf-choice select');
@@ -74,7 +77,77 @@ const GrittyFleet = (() => {
       if (view.kind === 'ship') { showFleet(); e.stopPropagation(); }
     });
 
-    function say(text) { statusEl.textContent = text; }
+    let sayTimer = 0;
+    function say(text) { statusEl.textContent = text; statusEl.classList.remove('gf-faded'); clearTimeout(sayTimer); sayTimer = setTimeout(() => statusEl.classList.add('gf-faded'), 6000); }
+
+    /* ---------------- camera: pan and zoom, remembered per view ----------------
+       The canvas and its button layer sit in one .gf-cam box that is translated and scaled together, so clicks stay
+       exactly on the art at any zoom. Offsets are stored as fractions of the stage, so a resize keeps the view. */
+    const stage = $('.gf-stage'), camEl = $('.gf-cam'), cams = new Map(), ZMAX = 4;
+    const camKey = () => view.kind === 'fleet' ? 'fleet' : 'ship:' + view.id;
+    function defaultCam() {
+      if (view.kind === 'fleet') return { z: 1, x: 0, y: 0 };
+      const z = 1.55, fx = 330 / W, fy = 182 / H;           // open on the decks, the crew big enough to read
+      return clampCam({ z, x: 0.5 - fx * z, y: 0.5 - fy * z });
+    }
+    function clampCam(c) { c.z = Math.max(1, Math.min(ZMAX, c.z)); c.x = Math.max(1 - c.z, Math.min(0, c.x)); c.y = Math.max(1 - c.z, Math.min(0, c.y)); return c; }
+    function cam() { const k = camKey(); if (!cams.has(k)) cams.set(k, defaultCam()); return cams.get(k); }
+    function applyCam() {
+      const c = cam(), r = stage.getBoundingClientRect();
+      camEl.style.transform = 'translate(' + (c.x * r.width).toFixed(2) + 'px,' + (c.y * r.height).toFixed(2) + 'px) scale(' + c.z.toFixed(4) + ')';
+      camEl.style.setProperty('--z', c.z.toFixed(4));
+      stage.classList.toggle('gf-zoomed', c.z > 1.01);
+    }
+    function zoomAt(f, px, py) {   // px, py: point in the stage, 0..1
+      const c = cam(), z = Math.max(1, Math.min(ZMAX, c.z * f)), k = z / c.z;
+      c.x = px - (px - c.x) * k; c.y = py - (py - c.y) * k; c.z = z; clampCam(c); applyCam();
+    }
+    function panBy(dx, dy) { const c = cam(); c.x += dx; c.y += dy; clampCam(c); applyCam(); }
+    stage.addEventListener('wheel', e => {
+      e.preventDefault(); const r = stage.getBoundingClientRect();
+      zoomAt(Math.exp(-e.deltaY * 0.0016), (e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height);
+    }, { passive: false });
+    const ptrs = new Map(); let drag = null, dragged = false, pinch = null;
+    stage.addEventListener('pointerdown', e => {
+      if (e.target.closest('.gf-zoom, .gf-pop')) return;
+      ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (ptrs.size === 1) { drag = { x: e.clientX, y: e.clientY, id: e.pointerId }; dragged = false; }
+      if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch = { d: Math.hypot(a.x - b.x, a.y - b.y) }; }
+    });
+    stage.addEventListener('pointermove', e => {
+      if (!ptrs.has(e.pointerId)) return;
+      const r = stage.getBoundingClientRect(), prev = ptrs.get(e.pointerId); ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (ptrs.size === 2 && pinch) {
+        const [a, b] = [...ptrs.values()], d = Math.hypot(a.x - b.x, a.y - b.y);
+        zoomAt(d / pinch.d, ((a.x + b.x) / 2 - r.left) / r.width, ((a.y + b.y) / 2 - r.top) / r.height); pinch.d = d; dragged = true; return;
+      }
+      if (!drag) return;
+      if (!dragged && Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 5) return;
+      if (!dragged) { dragged = true; stage.setPointerCapture(e.pointerId); stage.classList.add('gf-dragging'); }
+      panBy((e.clientX - prev.x) / r.width, (e.clientY - prev.y) / r.height);
+    });
+    const endPtr = e => { ptrs.delete(e.pointerId); if (ptrs.size < 2) pinch = null; if (!ptrs.size) { drag = null; stage.classList.remove('gf-dragging'); } };
+    stage.addEventListener('pointerup', endPtr); stage.addEventListener('pointercancel', endPtr);
+    // a drag must not also click whatever it started on
+    stage.addEventListener('click', e => { if (dragged) { e.stopPropagation(); e.preventDefault(); dragged = false; } }, true);
+    $('.gf-zoom').addEventListener('click', e => {
+      const b = e.target.closest('[data-zoom]'); if (!b) return;
+      if (b.dataset.zoom === 'fit') { cams.set(camKey(), view.kind === 'fleet' ? { z: 1, x: 0, y: 0 } : { z: 1, x: 0, y: 0 }); applyCam(); }
+      else zoomAt(b.dataset.zoom === 'in' ? 1.35 : 1 / 1.35, 0.5, 0.5);
+    });
+    stage.addEventListener('keydown', e => {
+      if (e.target !== stage) return;
+      const k = e.key, step = 0.06;
+      if (k === '+' || k === '=') zoomAt(1.25, 0.5, 0.5); else if (k === '-' || k === '_') zoomAt(0.8, 0.5, 0.5);
+      else if (k === '0') { cams.set(camKey(), { z: 1, x: 0, y: 0 }); applyCam(); }
+      else if (k === 'ArrowLeft') panBy(step, 0); else if (k === 'ArrowRight') panBy(-step, 0); else if (k === 'ArrowUp') panBy(0, step); else if (k === 'ArrowDown') panBy(0, -step);
+      else return;
+      e.preventDefault();
+    });
+    if (typeof ResizeObserver !== 'undefined') new ResizeObserver(() => applyCam()).observe(stage);
+    // names: off by default (they crowd the art); hover, focus or the Names button shows them
+    const namesBtn = $('.gf-names-btn');
+    namesBtn.addEventListener('click', () => { const on = !root.classList.contains('gf-names'); root.classList.toggle('gf-names', on); namesBtn.setAttribute('aria-pressed', String(on)); });
 
     /* ---------------- data ---------------- */
     function refresh() {
@@ -119,13 +192,13 @@ const GrittyFleet = (() => {
 
     /* ---------------- views ---------------- */
     function showFleet() {
-      view = { kind: 'fleet' }; closePop(); buildHotspots();
+      view = { kind: 'fleet' }; closePop(); buildHotspots(); applyCam();
       if (lastShipButton) { const b = [...root.querySelectorAll(`[data-ship="${lastShipButton}"]`)].find(x => x.offsetParent); if (b) b.focus(); }
       if (reduced) draw();
     }
     function showShip(id) {
       if (!shipById(id)) return;
-      view = { kind: 'ship', id }; lastShipButton = id; closePop(); buildHotspots();
+      view = { kind: 'ship', id }; lastShipButton = id; closePop(); buildHotspots(); applyCam();
       const first = [...root.querySelectorAll('.gf-hot button, .gf-list button')].find(x => x.offsetParent); if (first) first.focus({ preventScroll: true });
       if (reduced) draw();
     }
@@ -176,7 +249,9 @@ const GrittyFleet = (() => {
         const it = L.items[+b.dataset.item]; activate({ kind: it.kind, deptId: ship.id, ref: it.ref }, it.plate + ' (' + it.sub + ')', b);
       }));
       root.querySelectorAll('[data-crew]').forEach(b => b.addEventListener('click', () => {
-        const p = L.place[+b.dataset.crew]; activate({ kind: 'crew', agentId: p.crew.id, deptId: ship.id }, p.crew.name, b);
+        const p = L.place[+b.dataset.crew]; hot.querySelectorAll('.gf-crew.sel').forEach(x => x.classList.remove('sel'));
+        const onShip = hot.querySelector('[data-agent="' + p.crew.id + '"]'); if (onShip) onShip.classList.add('sel');
+        activate({ kind: 'crew', agentId: p.crew.id, deptId: ship.id }, p.crew.name, b);
       }));
     }
 
@@ -200,10 +275,10 @@ const GrittyFleet = (() => {
       raf = requestAnimationFrame(loop);
     }
 
-    refresh();
+    refresh(); applyCam();
     if (reduced) draw(); else raf = requestAnimationFrame(loop);
     const poll = opts.pollMs ? setInterval(() => { if (!destroyed) refresh(); }, opts.pollMs) : 0;
-    say('Select a ship to see its cutaway. Clicks inside a ship open the matching GRITTY OS view.');
+    say('Select a ship to look inside. Drag to look around, scroll or pinch to zoom.');
 
     return {
       refresh, showFleet, showShip,

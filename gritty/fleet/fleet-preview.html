@@ -19,11 +19,16 @@
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 var(--body); }
-.band { background: var(--sim); color: #e3b25e; font: 400 18px/1.2 var(--plate); letter-spacing: .04em;
-  padding-block: 6px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
-.wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; align-items: start;
-  padding-block: 14px 28px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
-aside { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.band { background: var(--sim); color: #e3b25e; font: 400 16px/1.2 var(--plate); letter-spacing: .04em; padding-right: 150px !important;
+  padding-block: 4px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.wrap { display: block; --gf-chrome: 118px;
+  padding-block: 8px 12px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+aside { position: fixed; top: 0; right: 0; bottom: 0; width: min(340px, 92vw); z-index: 10; overflow-y: auto; display: flex; flex-direction: column; gap: 14px;
+  background: var(--bg); border-left: 1px solid var(--edge); box-shadow: -12px 0 30px #000a;
+  padding-block: 12px; padding-left: 12px; padding-right: max(12px, env(safe-area-inset-right, 0px)); }
+aside[hidden] { display: none; }
+.drawer-btn { position: fixed; top: 6px; right: max(10px, env(safe-area-inset-right, 0px)); z-index: 11; font: 400 18px/1 var(--plate); color: var(--ink); background: var(--panel); border: 1px solid var(--edge); padding: 6px 10px; cursor: pointer; }
+.drawer-btn[aria-expanded="true"] { color: var(--brass); border-color: var(--brass); }
 section { background: var(--panel); border: 1px solid var(--edge); padding: 12px; display: flex; flex-direction: column; gap: 8px; }
 h3 { margin: 0; font: 400 24px/1 var(--plate); color: var(--brass); letter-spacing: .05em; text-transform: uppercase; }
 .note { margin: 0; color: var(--muted); font-size: 13px; }
@@ -37,14 +42,15 @@ h3 { margin: 0; font: 400 24px/1 var(--plate); color: var(--brass); letter-spaci
 .ctl button:hover { border-color: var(--brass); color: var(--brass); }
 .ctl label { display: flex; gap: 6px; align-items: center; font: 400 18px/1 var(--plate); color: var(--muted); }
 :focus-visible { outline: 2px solid #f0cf8a; outline-offset: 2px; }
-@media (max-width: 900px) { .wrap { grid-template-columns: 1fr; } }
+
 </style>
 </head>
 <body>
-<div class="band" role="note">SIMULATED · crew names and IDs follow your station export; every status, alert and event is fake. Clicks call a stand-in for GRITTY OS, not your app.</div>
+<div class="band" role="note">SIMULATED · real crew names, fake statuses and events · clicks call a stand-in for GRITTY OS</div>
+<button type="button" class="drawer-btn" aria-expanded="false" aria-controls="drawer">Simulate &amp; log</button>
 <div class="wrap">
   <main id="fleet"></main>
-  <aside>
+  <aside id="drawer" hidden>
     <section aria-labelledby="h-calls">
       <h3 id="h-calls">What would open</h3>
       <p class="note">Each click in the fleet calls one existing GRITTY OS entry point. In your PC app that call opens the real dashboard, workflow map, output vault or dossier.</p>
@@ -143,6 +149,9 @@ document.querySelector('.ctl').addEventListener('click', e => {
 });
 document.getElementById('calm').addEventListener('change', e => start(e.target.checked));
 start(undefined);
+const drawerBtn = document.querySelector('.drawer-btn'), drawer = document.getElementById('drawer');
+drawerBtn.addEventListener('click', () => { const open = drawer.hidden; drawer.hidden = !open; drawerBtn.setAttribute('aria-expanded', String(open)); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !drawer.hidden) { drawer.hidden = true; drawerBtn.setAttribute('aria-expanded', 'false'); drawerBtn.focus(); } });
 </script>
 </body>
 </html>
