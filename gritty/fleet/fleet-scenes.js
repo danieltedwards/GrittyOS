@@ -23,26 +23,35 @@ const GrittyFleetScenes = (() => {
   };
 
   /* ================= layouts (shared by drawing and by the click layer) ================= */
-  function fleetLayout(fleet) {
+  // the ship's entry in the layout document (fleet-doc.js), if the host passed one
+  const docShip = (input, id) => input && input.fleetDoc && input.fleetDoc.ships && input.fleetDoc.ships[id];
+  function fleetLayout(fleet, input, drag) {
     return fleet.map((s, i) => {
-      const [cx, cy] = FLEET_POS[s.id] || [80 + (i % 5) * 120, 40 + Math.floor(i / 5) * 300];
-      const w = s.flagship ? 156 : 120, h = s.flagship ? 52 : 40;
-      return { ship: s, cx, cy, x: cx - w / 2, y: cy - h / 2, w, h };
+      const ds = docShip(input, s.id), def = FLEET_POS[s.id] || [80 + (i % 5) * 120, 40 + Math.floor(i / 5) * 300];
+      let cx = ds ? ds.pos.x : def[0], cy = ds ? ds.pos.y : def[1];
+      if (drag && drag.id === s.id) { cx = drag.x; cy = drag.y; }
+      const big = ds ? ds.hull === 'flagship' : s.flagship, w = big ? 156 : 120, h = big ? 52 : 40;
+      return { ship: s, cx, cy, x: cx - w / 2, y: cy - h / 2, w, h, big, name: (ds && ds.name) || s.name };
     });
   }
   function cutawayLayout(ship, input) {
     const conv = (input.conveyors && input.conveyors[ship.id]) || [];
-    const meta = (input.departments || []).find(d => d.id === ship.id) || {};
+    const meta = (input.departments || []).find(d => d.id === ship.id) || {}, ds = docShip(input, ship.id);
     const rooms = ship.rooms.length ? ship.rooms : ['deck'];
     const top = 124, bottom = 250, dh = Math.floor((bottom - top) / rooms.length);
-    const decks = rooms.map((roomId, i) => ({ roomId, name: (meta.deckNames && meta.deckNames[i]) || 'Deck', y0: top + i * dh, y1: top + (i + 1) * dh - 5 }));
+    const decks = rooms.map((roomId, i) => ({ roomId, name: (ds && ds.decks[i] && ds.decks[i].name !== 'Deck' && ds.decks[i].name) || (meta.deckNames && meta.deckNames[i]) || 'Deck',
+      props: ds && ds.decks[i] ? ds.decks[i].props : null, y0: top + i * dh, y1: top + (i + 1) * dh - 5 }));
+    const stations = (ds && ds.stations) || {};
     const leader = ship.crew.find(c => c.rank === 'admiral') || ship.crew.find(c => c.id === ship.captainId) || null;
     const rest = ship.crew.filter(c => c !== leader).sort((a, b) => {
       const ia = conv.indexOf(a.id), ib = conv.indexOf(b.id); return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
     });
-    const per = Math.ceil(rest.length / decks.length) || 1, place = [];
+    // crew with a saved station stand there; everyone else is spread evenly over the decks
+    const pinned = rest.filter(c => stations[c.id] && decks[stations[c.id].deck]), free = rest.filter(c => !pinned.includes(c));
+    const per = Math.ceil(free.length / decks.length) || 1, place = [];
+    pinned.forEach(c => { const st = stations[c.id], d = decks[st.deck]; place.push({ crew: c, deck: st.deck, x: Math.round(Math.min(st.x, HR(d.y1) - 48)), y: d.y1 - 30, w: 18, h: 30, slot: 60 }); });
     decks.forEach((d, di) => {
-      const here = rest.slice(di * per, di * per + per), x0 = 266, x1 = Math.min(548, HR(d.y1) - 30), sw = (x1 - x0) / Math.max(1, here.length);
+      const here = free.slice(di * per, di * per + per), x0 = 266, x1 = Math.min(548, HR(d.y1) - 30), sw = (x1 - x0) / Math.max(1, here.length);
       here.forEach((c, i) => place.push({ crew: c, deck: di, x: Math.round(x0 + sw * (i + 0.5) - 14), y: d.y1 - 30, w: 18, h: 30, slot: sw }));
     });
     if (leader) {
@@ -212,7 +221,7 @@ const GrittyFleetScenes = (() => {
         if (((x - ISLAND.cx) / (ISLAND.rx + 8)) ** 2 + ((y - ISLAND.cy) / (ISLAND.ry + 8)) ** 2 < 1) continue;
         px(x + Math.round(mt / 1500 % 3), y, tw > 0.85 ? 3 : 2, 1, tw > 0.85 ? R.sea[8] : R.sea[6]);
       }
-      const lay = fleetLayout(fleet), at = Object.fromEntries(lay.map(L => [L.ship.id, [L.cx, L.cy]]));
+      const lay = fleetLayout(fleet, input, fx.drag), at = Object.fromEntries(lay.map(L => [L.ship.id, [L.cx, L.cy]]));
       // lighthouse beam sweeping the water
       if (!fx.reduced) {
         const [bx, by] = base.lighthouse, ang = t / 2600;
@@ -222,13 +231,14 @@ const GrittyFleetScenes = (() => {
       }
       lay.forEach((L, i) => {
         const s = L.ship, laid = s.laidUp, bob = fx.reduced ? 0 : Math.round(Math.sin(mt / (laid ? 1500 : 950) + i * 1.3) * 1);
-        const spr = C('top' + s.id + laid + s.flagship, () => A().shipTop(s.id, { flagship: s.flagship, laidUp: laid }));
+        const spr = C('top' + s.id + laid + L.big, () => A().shipTop(s.id, { flagship: L.big, laidUp: laid }));
         // wake rings and hull shadow
         if (!fx.reduced) { const ph = (mt / 2200 + i * 0.3) % 1; g.globalAlpha = 0.35 * (1 - ph); g.strokeStyle = R.sea[8]; g.beginPath(); g.ellipse(L.cx, L.cy, L.w / 2 + ph * 14, L.h / 2 + ph * 8, 0, 0, 7); g.stroke(); g.globalAlpha = 1; }
         g.globalAlpha = 0.45; g.fillStyle = '#030608'; g.beginPath(); g.ellipse(L.cx + 4, L.cy + 6, L.w / 2, L.h / 2.2, 0, 0, 7); g.fill(); g.globalAlpha = 1;
         if (laid) { g.strokeStyle = R.iron[4]; g.beginPath(); g.moveTo(L.x + L.w - 8, L.cy + bob); g.lineTo(L.x + L.w + 8, L.cy + 10); g.stroke(); px(L.x + L.w + 7, L.cy + 9, 3, 3, R.iron[3]); }
         g.drawImage(spr.canvas, Math.round(L.x), Math.round(L.y + bob));
-        if (!laid) for (const [lx, ly] of spr.lights) lights.push(LAMP(L.x + lx, L.y + ly + bob, s.flagship ? 90 : 72, 0.95));
+        if (fx.drag && fx.drag.id === s.id) { g.strokeStyle = fx.drag.ok ? '#9fd18a' : '#d0503a'; g.setLineDash([4, 3]); g.strokeRect(L.x - 4.5, L.y - 4.5, L.w + 9, L.h + 9); g.setLineDash([]); }
+        if (!laid) for (const [lx, ly] of spr.lights) lights.push(LAMP(L.x + lx, L.y + ly + bob, L.big ? 90 : 72, 0.95));
         else lights.push({ x: L.x + 6, y: L.cy + bob, r: 22, i: 0.35 });
         deckCrew(L, s, bob, mt, fx.reduced);
         // trouble: black-sailed raiders circling and trading fire
@@ -303,7 +313,7 @@ const GrittyFleetScenes = (() => {
     }
     function shipCanvas(ship, L) {
       const lit = !ship.laidUp;
-      return C('ship:' + ship.id + ':' + lit + ':' + L.place.length + ':' + L.decks.length, () => buildShip(ship, L, lit));
+      return C('ship:' + ship.id + ':' + lit + ':' + JSON.stringify(L.decks.map(d => [d.name, d.props])) + ':' + L.place.map(q => q.crew.id + q.x + q.deck).join(), () => buildShip(ship, L, lit));
     }
     function buildShip(ship, L, lit) {
       const P = X(), R = P.RAMP, p = new P.Px(W, H), d = A().deptOf(ship.id), lights = [];
@@ -378,6 +388,11 @@ const GrittyFleetScenes = (() => {
       for (let y = 70; y < 118; y += 9) p.hline(250, 261, y, R.rust[2]);
       const cv = p.toCanvas(), cx = cv.getContext('2d'); cx.imageSmoothingEnabled = false;
       const put = (img, x, y) => { cx.drawImage(img, Math.round(x), Math.round(y)); return img; };
+      const WALLSET = new Set(['printLine', 'wallMap', 'chalkboard']);
+      const propImg = (type, on) => ({ easel: A().easel, workbench: A().workbench, paintShelf: A().paintShelf, crate: () => A().crate(16, 13, 5), barrel: A().barrel, sack: A().sack,
+        chartTable: A().chartTable, globe: A().globe, ledgerDesk: () => A().ledgerDesk(on), coinPile: A().coinPile, radio: () => A().radio(on), bookshelf: () => A().bookshelf(4),
+        camera: A().camera, stageLight: () => A().stageLight(on), instrumentRack: () => A().instrumentRack(on), wallMap: A().wallMap, chalkboard: A().chalkboard,
+        printLine: () => A().printLine(120, 4), chest: () => A().chest(on) }[type] || (() => null))();
       put(A().cannon(), 512, 96);
       // flag at the main truck
       for (let i = 0; i < 16; i++) { cx.fillStyle = i % 4 < 2 ? d.stripe : '#1d1611'; cx.fillRect(320 + i, 6 + Math.round(Math.sin(i / 3) * 1), 1, 8 - (i >> 2)); }
@@ -388,9 +403,11 @@ const GrittyFleetScenes = (() => {
       // ladder through all decks to the hold
       put(A().ladder(250 - 112 + 6), 235, 112);
       // per-deck dressing from the department theme
-      const theme = THEME[ship.id] || [{ wall: ['wallMap'], floor: ['crate', 'barrel'] }];
+      const theme = THEME[ship.id] || [{ wall: ['wallMap'], floor: ['crate', 'barrel'] }], WALL = ['printLine', 'wallMap', 'chalkboard'];
       L.decks.forEach((dd, di) => {
-        const th = theme[di % theme.length], tall = dd.y1 - dd.y0 > 60, crew = L.place.filter(q => q.deck === di).sort((a, b) => a.x - b.x);
+        // the layout document's dressing wins; the department theme is the default
+        const th = dd.props ? { wall: dd.props.filter(p => WALL.includes(p.type)).map(p => p.type), floor: dd.props.filter(p => !WALL.includes(p.type)).map(p => p.type),
+          placed: dd.props.filter(p => p.x != null) } : theme[di % theme.length], tall = dd.y1 - dd.y0 > 60, crew = L.place.filter(q => q.deck === di).sort((a, b) => a.x - b.x);
         // lanterns along the ceiling
         for (let x = 300; x < HR(dd.y1) - 30; x += 96) { put(A().lantern(lit), x, dd.y0 + 1); if (lit) lights.push(LAMP(x + 4, dd.y0 + 9, tall ? 80 : 56)); }
         // pipes along the ceiling, with joints and a valve now and then
@@ -416,7 +433,9 @@ const GrittyFleetScenes = (() => {
           put(img, tall ? Math.min(wx + 10, HR(dd.y1) - 40 - img.width) : wx, tall ? dd.y0 + 28 : dd.y0 + 6); wx += img.width + 20;
         }
         // floor pieces beside each crew member (and filling empty room)
-        const props = th.floor.slice(), slots = crew.length ? crew.map(q => q.x + 21) : [300, 380, 460];
+        const placedTypes = (th.placed || []).map(p => p.type);
+        (th.placed || []).forEach(pp => { const img = propImg(pp.type, lit); if (img && img.height <= dd.y1 - dd.y0 + 2) put(img, Math.min(pp.x, HR(dd.y1) - 24 - img.width), WALLSET.has(pp.type) ? dd.y0 + 8 : dd.y1 - img.height + 1); });
+        const props = th.floor.filter(t => !placedTypes.includes(t) || (th.placed || []).filter(p => p.type === t).length < th.floor.filter(x => x === t).length), slots = crew.length ? crew.map(q => q.x + 21) : [300, 380, 460];
         slots.forEach((sx, k) => {
           const key = props[k % props.length]; let img;
           switch (key) {
