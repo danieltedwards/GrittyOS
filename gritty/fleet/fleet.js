@@ -64,7 +64,7 @@ const GrittyFleet = (() => {
     const cv = $('canvas'), g = cv.getContext('2d'), hot = $('.gf-hot'), list = $('.gf-list'), pop = $('.gf-pop'), statusEl = $('.gf-status');
     const select = $('.gf-choice select');
     const renderer = S().createRenderer(cv);
-    const fx = { reduced, particles, flashes, pacer, now, ttl: HANDOFF_TTL };
+    const fx = { reduced, particles, flashes, pacer, now, ttl: HANDOFF_TTL, skinFor: opts.skinFor || null };
     select.value = crewChoice;
     select.addEventListener('change', () => { crewChoice = select.value; say('Crew clicks now open: ' + select.selectedOptions[0].textContent + '.'); });
     $('.gf-back').addEventListener('click', showFleet);
@@ -164,7 +164,7 @@ const GrittyFleet = (() => {
       html += L.items.map((it, i) => `<button type="button" class="gf-spot gf-prop k-${it.kind}" data-item="${i}"
           style="left:${pct(it.x, W)};top:${pct(it.y, H)};width:${pct(it.w, W)};height:${pct(Math.max(it.h, 8), H)}"
           aria-label="${esc(it.label)}: ${esc(it.sub)}"><span class="gf-plate small"><b>${esc(it.plate)}</b><span>${esc(it.sub)}</span></span></button>`).join('');
-      html += L.place.map((p, i) => `<button type="button" class="gf-spot gf-crew st-${p.crew.status}${p.leader ? ' leader' : ''}" data-crew="${i}"
+      html += L.place.map((p, i) => `<button type="button" class="gf-spot gf-crew st-${p.crew.status}${p.leader ? ' leader' : ''}" data-crew="${i}" data-agent="${esc(p.crew.id)}"
           style="left:${pct(p.x - 2, W)};top:${pct(p.y - 16, H)};width:${pct(p.w + 4, W)};height:${pct(p.h + 8, H)}"
           aria-label="${esc(p.crew.name)}${p.crew.rank !== 'crew' ? ', ' + p.crew.rank : ''}. ${esc(STATUS_TEXT[p.crew.status])}.">
           <span class="gf-name">${p.crew.rank === 'admiral' ? 'Admiral ' : p.crew.rank === 'captain' ? 'Capt. ' : ''}${esc(shortName(p.crew.name, ship))}</span></button>`).join('');
@@ -184,8 +184,14 @@ const GrittyFleet = (() => {
     function draw() {
       if (destroyed) return;
       const t = now();
-      if (view.kind === 'fleet') renderer.drawFleet(fleet, input, t, fx);
-      else renderer.drawCutaway(shipById(view.id), input, t, fx);
+      if (view.kind === 'fleet') { renderer.drawFleet(fleet, input, t, fx); return; }
+      const L = renderer.drawCutaway(shipById(view.id), input, t, fx);
+      // crew buttons follow their avatars around the ship
+      if (L && L.crewRects) for (const r of L.crewRects) {
+        const b = hot.querySelector('[data-agent="' + r.id + '"]'); if (!b) continue;
+        const left = pct(r.x - 2, W), top = pct(r.y - 16, H);
+        if (b.style.left !== left || b.style.top !== top) { b.style.left = left; b.style.top = top; b.style.width = pct(r.w + 4, W); b.style.height = pct(r.h + 14, H); }
+      }
     }
     let last = 0;
     function loop(ts) {

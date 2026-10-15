@@ -59,6 +59,8 @@ h3 { margin: 0; font: 400 24px/1 var(--plate); color: var(--brass); letter-spaci
         <button type="button" data-sim="fail">Two blocking failures on Etsy</button>
         <button type="button" data-sim="data">Restore TELEMETRY data</button>
         <button type="button" data-sim="handoff">Send a research packet to Etsy</button>
+        <button type="button" data-sim="work">Etsy designer starts work</button>
+        <button type="button" data-sim="pass">Designer hands work to Content</button>
         <button type="button" data-sim="reset">Reset</button>
         <label><input type="checkbox" id="calm"> Reduced motion (reloads the fleet)</label>
       </div>
@@ -69,6 +71,8 @@ h3 { margin: 0; font: 400 24px/1 var(--plate); color: var(--brass); letter-spaci
 <script src="fleet-pixel.js"></script>
 <script src="fleet-art.js"></script>
 <script src="fleet-scenes.js"></script>
+<script src="fleet-crew.js"></script>
+<script src="fleet-skins.js"></script>
 <script src="fleet-fixture.js"></script>
 <script src="fleet.js"></script>
 <script>
@@ -101,12 +105,20 @@ const host = {
   },
   StationUI: { showAgent: (id, lane) => logCall('StationUI.showAgent', [id, lane]) }
 };
+// Avatars: the captain ChatGPT made (sliced into StarNet's frame names) plus StarNet's own approved skins from this
+// repository. In the PC app each agent simply uses the skin it already has on the station.
+const gptSkins = GrittyFleetSkins.create({ base: 'preview-skins/' }), starnetSkins = GrittyFleetSkins.create({ base: '../../frontend/assets/sprites/' });
+const POOL = ['approved_voidwizard', 'approved_astronaut', 'approved_plaguedoctor', 'approved_secretagent', 'approved_skeleton', 'approved_crewmate', 'approved_baddie', 'approved_ultron'];
+const SKIN = { agent: 'gpt', drafter: 'gpt', 'service-lead': 'gpt', 'video-lead': 'gpt' };
+FX.roster.forEach((a, i) => { if (!SKIN[a.agentId]) SKIN[a.agentId] = POOL[i % POOL.length]; });
+function skinFor(id) { const s = SKIN[id]; return s === 'gpt' ? gptSkins.get('gpt_captain') : starnetSkins.get(s); }
 let fleet;
 function start(reducedMotion) {
   if (fleet) fleet.destroy();
   fleet = GrittyFleet.mount(document.getElementById('fleet'), {
     host, crewChoice: 'ask', reducedMotion,
-    getInput: () => ({ departments: FX.departments, roster: FX.roster, conveyors: FX.conveyors, evidence })
+    getInput: () => ({ departments: FX.departments, roster: FX.roster, conveyors: FX.conveyors, evidence }),
+    skinFor
   });
   const deep = location.hash.replace('#', '');
   if (deep && FX.departments.some(d => d.id === deep)) fleet.showShip(deep);
@@ -123,6 +135,8 @@ document.querySelector('.ctl').addEventListener('click', e => {
       { id: 'f-y' + seq, kind: 'failure', deptId: 'etsy', state: 'open', blocking: true, at: t, label: 'Simulated blocking failure' }); },
     data: () => { resolve('d-1'); FX.roster.find(a => a.agentId === 'harvester').status = 'idle'; },
     handoff: () => { evidence.push({ id: 'h-n' + (++seq), kind: 'handoff', from: 'operations', to: 'etsy', state: 'open', at: t, label: 'Research packet' }); },
+    work: () => { FX.roster.find(a => a.agentId === 'designer').status = 'running'; },
+    pass: () => { evidence.push({ id: 'h-a' + (++seq), kind: 'handoff', deptId: 'etsy', from: 'etsy', to: 'etsy', fromAgent: 'designer', toAgent: 'publisher', state: 'open', at: t, label: 'Artwork to content' }); },
     reset: () => location.reload()
   })[b.dataset.sim]();
   fleet.refresh();

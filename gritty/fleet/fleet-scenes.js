@@ -435,7 +435,8 @@ const GrittyFleetScenes = (() => {
         // floor pieces beside each crew member (and filling empty room)
         const placedTypes = (th.placed || []).map(p => p.type);
         (th.placed || []).forEach(pp => { const img = propImg(pp.type, lit); if (img && img.height <= dd.y1 - dd.y0 + 2) put(img, Math.min(pp.x, HR(dd.y1) - 24 - img.width), WALLSET.has(pp.type) ? dd.y0 + 8 : dd.y1 - img.height + 1); });
-        const props = th.floor.filter(t => !placedTypes.includes(t) || (th.placed || []).filter(p => p.type === t).length < th.floor.filter(x => x === t).length), slots = crew.length ? crew.map(q => q.x + 21) : [300, 380, 460];
+        crew.forEach((q, k) => { const st = A().station(ship.id, lit, k + di * 5 + 1); put(st, q.x + 9 - 17, dd.y1 - st.height + 1); if (lit) lights.push({ x: q.x + 9 + 10, y: dd.y1 - 20, r: 42, i: 0.8, warm: 'rgba(255,170,80,0.18)' }); });
+        const props = th.floor.filter(t => !placedTypes.includes(t) || (th.placed || []).filter(p => p.type === t).length < th.floor.filter(x => x === t).length), slots = crew.length ? crew.map(q => q.x + 30) : [300, 380, 460];
         slots.forEach((sx, k) => {
           const key = props[k % props.length]; let img;
           switch (key) {
@@ -449,7 +450,7 @@ const GrittyFleetScenes = (() => {
           }
           const slot = crew[k] ? crew[k].slot : 80;
           if (img.height > dd.y1 - dd.y0 + 2) return;
-          if (crew.length && slot < img.width + 24) return;
+          if (crew.length && slot < img.width + 44) return;
           put(img, Math.min(sx, HR(dd.y1) - 24 - img.width), dd.y1 - img.height + 1);
         });
       });
@@ -473,6 +474,28 @@ const GrittyFleetScenes = (() => {
         p.rect(24, 0, 6, 3, '#a83324'); p.outline('#060505'); return p.toCanvas();
       });
     }
+    // one simulation per ship and layout; statuses and real handoffs are fed in every frame
+    const sims = new Map();
+    function crewSim(ship, L, input, fx, t) {
+      const key = ship.id + ':' + L.place.map(q => q.crew.id + '@' + q.deck + ':' + q.x).join(',');
+      let s = sims.get(key);
+      if (!s) {
+        const world = { decks: L.decks.map(d => ({ y: d.y1, x0: 252, x1: Math.min(556, Math.round(HR(d.y1)) - 26) })), ladderX: 241, quarter: { y: 74, x0: 100, x1: 208 } };
+        s = { sim: window.GrittyFleetCrew.create(world, L.place.map(q => ({ id: q.crew.id, status: q.crew.status, deck: q.deck, homeX: q.x + 9 })), { seed: ship.id }), last: t, seen: new Set() };
+        if (fx.reduced) for (let i = 0; i < 600; i++) s.sim.step(0.05);
+        sims.set(key, s);
+      }
+      for (const q of L.place) s.sim.setStatus(q.crew.id, q.crew.status);
+      const aboard = new Set(L.place.map(q => q.crew.id));
+      for (const e of (input.evidence || [])) {
+        if (e.kind !== 'handoff' || !e.fromAgent || !e.toAgent || s.seen.has(e.id) || !aboard.has(e.fromAgent) || !aboard.has(e.toAgent)) continue;
+        if (fx.now() - e.at > fx.ttl) continue;
+        s.seen.add(e.id); s.sim.handoff(e.fromAgent, e.toAgent);
+      }
+      if (!fx.reduced) s.sim.step(Math.min(0.1, Math.max(0, (t - s.last) / 1000)));
+      s.last = t;
+      return s.sim;
+    }
     function drawCutaway(ship, input, t, fx) {
       const P = X(), R = P.RAMP, mt = fx.reduced ? 0 : t, L = cutawayLayout(ship, input), built = shipCanvas(ship, L), lights = built.lights.slice();
       g.drawImage(sky(), 0, 0);
@@ -493,17 +516,24 @@ const GrittyFleetScenes = (() => {
       for (let r = 0; r < H - WL; r += 1) { const sy = WL - 1 - r * 1.15; if (sy < 0) break; const off = fx.reduced ? 0 : Math.round(Math.sin(r * 0.35 + mt / 380) * (1 + r / 40)); g.drawImage(built.canvas, 0, Math.round(sy), W, 1, off, WL + r, W, 1); }
       g.globalAlpha = 1;
       g.drawImage(built.canvas, 0, 0);
-      // crew
-      for (const q of L.place) {
-        const dim = q.crew.status === 'offline' || ship.laidUp, working = q.crew.status === 'running';
-        const pose = working ? (fx.reduced ? 2 : 2) : (!fx.reduced && Math.floor(mt / 900 + q.x) % 4 === 0 ? 1 : 0);
-        const spr = q.crew.rank === 'admiral' ? C('adm' + pose, () => A().admiral({ pose })) : C('p' + q.crew.id + pose + dim, () => A().person(q.crew.id, q.crew.name, ship.id, { pose, dim }));
-        g.drawImage(spr, q.x, q.y);
-        // each station has its own lamp: lit while that crew member is active, brighter while running
-        if (!dim && !q.leader) lights.push({ x: q.x + q.w / 2 + 6, y: q.y + 8, r: working ? 64 : 50, i: working ? 1 : 0.85, warm: working ? 'rgba(255,190,100,0.28)' : 'rgba(255,170,80,0.16)' });
-        const ch = { running: '*', 'waiting-approval': '!', blocked: 'x', failed: 'x', paused: '=', offline: '-', unknown: '?' }[q.crew.status];
-        if (ch) { const col = { '!': '#e0a33e', x: '#d0503a', '*': '#c9b26a', '=': '#c6bca0', '-': '#7a7f7c', '?': '#9aa3a0' }[ch]; g.drawImage(marker(ch, col), q.x + q.w / 2 - 6, q.y - 15); }
-      }
+      // crew: StarNet avatars living aboard, moved by fleet-crew.js from their real status
+      const sim = crewSim(ship, L, input, fx, t), TH = 34, rects = [];
+      const STATUS_CH = { running: '*', 'waiting-approval': '!', blocked: 'x', failed: 'x', paused: '=', offline: '-', unknown: '?' };
+      const byId = new Map(L.place.map(q => [q.crew.id, q]));
+      [...sim.agents.values()].sort((a, b) => a.y - b.y || a.x - b.x).forEach(a => {
+        const q = byId.get(a.id); if (!q) return;
+        const dim = q.crew.status === 'offline' || ship.laidUp, f = sim.frameOf(a, mt), skin = fx.skinFor ? fx.skinFor(a.id) : null;
+        let img = skin ? skin.frame(f.track, f.dir, f.i, TH) : null;
+        if (!img) { const pose = a.act === 'work' ? 2 : 0; img = q.crew.rank === 'admiral' ? C('adm' + pose, () => A().admiral({ pose })) : C('p' + q.crew.id + pose + dim, () => A().person(q.crew.id, q.crew.name, ship.id, { pose, dim })); }
+        const x = Math.round(a.x - img.width / 2), y = Math.round(a.y + 1 - img.height);
+        if (dim) g.filter = 'saturate(0.35) brightness(0.7)';
+        if (a.act === 'climb' || a.act === 'walk') { g.globalAlpha = 0.35; g.fillStyle = '#000'; g.fillRect(x + 2, Math.round(a.y), img.width - 4, 1); g.globalAlpha = 1; }
+        g.drawImage(img, x, y); g.filter = 'none';
+        const ch = STATUS_CH[q.crew.status];
+        if (ch) { const col = { '!': '#e0a33e', x: '#d0503a', '*': '#c9b26a', '=': '#c6bca0', '-': '#7a7f7c', '?': '#9aa3a0' }[ch]; g.drawImage(marker(ch, col), Math.round(a.x - 6), y - 15); }
+        rects.push({ id: a.id, x, y, w: img.width, h: img.height });
+      });
+      L.crewRects = rects;
       // the conveyor belt runs on the floor between its stations
       for (const it of L.items) if (it.belt) {
         const { y, xa, xb } = it.belt, off = fx.reduced ? 0 : Math.floor(mt / 200) % 6;

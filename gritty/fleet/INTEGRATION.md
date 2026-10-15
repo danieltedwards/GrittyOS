@@ -18,7 +18,11 @@ From: Claude (cloud session on the upstream fork). For: Codex and Dan, working i
 | `fleet/fleet-pixel.js` | Pixel toolkit: colour ramps, dithering, noise, outlines, a pixel buffer | Yes |
 | `fleet/fleet-art.js` | Sprite and prop library drawn in code: crew (per-agent looks and role tools), the Admiral, ~30 props, ships, trees, clouds | Yes, until hand-made sprite sheets replace pieces of it |
 | `fleet/fleet-scenes.js` | The harbour and cutaway scenes at 640×360: baked layers, reflections, parallax sky, light pass | Yes |
+| `fleet/fleet-crew.js` | Crew simulation: walk to desks, wander, climb ladders, carry handoffs, all driven by real status | Yes |
+| `fleet/fleet-skins.js` | Loads StarNet-format skins (the agents' own station avatars) and sizes them for the ship | Yes |
+| `fleet/fleet-doc.js` | Fleet layout document: berths, deck names, cosmetic props, crew stations; validated edits, undo | Yes |
 | `fleet/fleet.js` | Controller: views, click layer, crew chooser, narrow-screen list | Yes |
+| `fleet/preview-skins/gpt_captain/` | Dan's ChatGPT captain, sliced into StarNet frame names, for the preview | No (the PC already has it as a station skin) |
 | `fleet/fleet.css` | Styles, all scoped under `.gf` | Yes |
 | `fleet/fleet-fixture.js` | Simulated data for the preview | **No, never** |
 | `fleet/fleet-preview.html` | Standalone preview with a stand-in host | No |
@@ -65,8 +69,8 @@ needed. There is no sound at all. Reduced motion stops all movement and keeps th
 
 ## How to wire it into the PC app (proposed steps for Codex)
 
-1. Copy the six "ship it" files to `frontend/app/gritty-fleet/`. The packaged app 404s anything outside `frontend/`.
-2. In `frontend/index.html`, load `gritty-fleet/fleet.css`, then `fleet-model.js`, `fleet-pixel.js`, `fleet-art.js`, `fleet-scenes.js`, `fleet.js`,
+1. Copy the "ship it" files to `frontend/app/gritty-fleet/`. The packaged app 404s anything outside `frontend/`.
+2. In `frontend/index.html`, load `gritty-fleet/fleet.css`, then `fleet-model.js`, `fleet-doc.js`, `fleet-pixel.js`, `fleet-art.js`, `fleet-scenes.js`, `fleet-crew.js`, `fleet-skins.js`, `fleet.js`,
    **after** `gritty-os.js` and `stationui.js`.
 3. Write `frontend/app/gritty-fleet/fleet-source.js`, the one PC-specific file. Its job is
    `getInput()` returning `{ departments, roster, conveyors, evidence }` from `gritty-os-model.js` and
@@ -76,12 +80,20 @@ needed. There is no sound at all. Reduced motion stops all movement and keeps th
      `running | waiting-approval | blocked | failed | paused | idle | offline | unknown`.
    - `conveyors`: `{ etsy: ['designer','publisher','copywriter'] }` from the routing compiler (`pipeline.js`).
    - `evidence`: as in the table above.
-4. Mount it as a **Fleet** tab or window in the command deck:
-   `GrittyFleet.mount(el, { getInput, host: window, crewChoice: savedChoice })`. Call `.refresh()` from the
+4. Give it the agents' own avatars: create a loader on StarNet's sprite folder and map each agent to the skin it
+   already wears on the station:
+   ```js
+   const skins = GrittyFleetSkins.create({ base: 'assets/sprites/' });
+   const skinFor = id => { const a = App.agents().find(x => x.id === id), sk = a && DATA.SKINS[a.skin]; return sk ? skins.get(sk.set) : null; };
+   ```
+   Pass `skinFor` to `mount`. An agent with no loadable skin falls back to the drawn pirate.
+   For crew to carry work between stations, handoff evidence needs `fromAgent` and `toAgent`.
+5. Mount it as a **Fleet** tab or window in the command deck:
+   `GrittyFleet.mount(el, { getInput, host: window, crewChoice: savedChoice, skinFor })`. Call `.refresh()` from the
    U.bus listeners that already update the command deck (run start/end, permission prompt/response,
    deliverable changes). Keep the existing station floor and command deck reachable.
-5. Persist the crew-click choice wherever the command deck keeps its settings, not in a separate store.
-6. Rebuild and visually check the Windows app. Per the shared handoff, loose frontend file edits do not update
+6. Persist the crew-click choice wherever the command deck keeps its settings, not in a separate store.
+7. Rebuild and visually check the Windows app. Per the shared handoff, loose frontend file edits do not update
    the installed executable.
 
 ## Simulated vs live

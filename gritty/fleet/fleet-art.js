@@ -300,6 +300,24 @@
   function cannon() { const p = new Px(20, 10); p.rect(2, 1, 16, 5, R.iron[3]); p.rect(2, 1, 16, 1, R.iron[5]); p.rect(16, 0, 3, 7, R.iron[2]); p.disc(6, 7, 2, R.wood[3]); p.disc(14, 7, 2, R.wood[3]); p.outline(); return p.toCanvas(); }
   function porthole(lit) { const p = new Px(12, 12); for (let y = 0; y < 12; y++) for (let x = 0; x < 12; x++) { const d = (x - 5.5) ** 2 + (y - 5.5) ** 2; if (d < 36) p.set(x, y, d > 20 ? R.brass[d > 28 ? 2 : 4] : lit ? R.lamp[d < 6 ? 5 : 4] : R.sea[3]); } return p.toCanvas(); }
 
+  /* a crew member's own workstation against the back wall: a pinboard or screen above, a desk with a lamp below.
+     Crew at work sit facing it (StarNet's typing frames are drawn from behind), so it stands behind them. */
+  function station(deptId, lit, seed) {
+    const p = new Px(34, 38), d = deptOf(deptId), g = X.rng(seed || 3);
+    // board on the wall
+    p.rect(3, 0, 28, 17, R.wood[2]); p.rect(4, 1, 26, 15, R.wood[1]);
+    if (deptId === 'lab') { p.rect(6, 3, 22, 11, lit ? '#1c3a34' : R.iron[1]); if (lit) for (let x = 6; x < 28; x++) p.set(x, 8 + Math.round(Math.sin(x * 0.7 + seed) * 3), '#7fc6a8'); }
+    else if (deptId === 'youtube') { for (let i = 0; i < 3; i++) { p.rect(6 + i * 8, 3, 6, 5, C.bone[4]); p.rect(7 + i * 8, 4, 4, 3, [C.wine, C.navy, C.rust][i][3]); p.rect(6 + i * 8, 9, 6, 4, C.bone[3]); } }
+    else if (deptId === 'operations') { for (let y = 3; y < 14; y++) for (let x = 6; x < 28; x++) p.set(x, y, fbm(x / 6, y / 4, seed) > 0.55 ? R.canvas[4] : R.canvas[6]); p.line(8, 12, 24, 5, '#7a2019'); }
+    else { for (let i = 0; i < 4; i++) { const x = 5 + i * 6 + (g() * 2 | 0), y = 2 + (g() * 4 | 0), col = [C.rust, C.moss, C.navy, C.wine, R.brass][(g() * 5) | 0]; p.rect(x, y, 5, 7, C.bone[4]); p.rect(x + 1, y + 1, 3, 3, col[3]); p.set(x + 2, y, R.danger[3]); } }
+    // desk
+    p.rect(0, 22, 34, 3, R.wood[4]); p.rect(0, 22, 34, 1, R.wood[6]); p.rect(1, 25, 3, 13, R.wood[3]); p.rect(30, 25, 3, 13, R.wood[2]); p.rect(20, 25, 9, 8, R.wood[3]); p.set(24, 28, R.brass[5]);
+    p.rect(6, 19, 9, 3, C.bone[4]); p.rect(7, 18, 7, 1, C.bone[3]);                         // papers
+    p.rect(26, 17, 3, 5, R.iron[3]); p.rect(25, 15, 5, 3, lit ? R.lamp[4] : R.iron[4]); if (lit) p.set(27, 16, R.lamp[5]);   // lamp
+    p.rect(16, 20, 3, 2, d.stripe);
+    p.outline(); return p.toCanvas();
+  }
+
   /* ================= top-down: ships, enemies, trees, rocks ================= */
   function shipTop(deptId, o) {
     o = o || {};
@@ -373,7 +391,7 @@
     return p.toCanvas();
   }
 
-  return { DEPT, deptOf, toolFor, person, admiral, lantern, crate, barrel, sack, chest, coinPile, chartTable, wallMap, bookshelf, globe, ledgerDesk, radio,
+  return { DEPT, deptOf, toolFor, person, admiral, station, lantern, crate, barrel, sack, chest, coinPile, chartTable, wallMap, bookshelf, globe, ledgerDesk, radio,
     easel, printLine, paintShelf, workbench, camera, stageLight, instrumentRack, chalkboard, boiler, gear, ladder, wheel, cannon, porthole,
     shipTop, enemyTop, tree, rock, cloud };
 });
