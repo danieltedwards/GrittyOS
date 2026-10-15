@@ -1,0 +1,58 @@
+{
+  "gritty_admiral": {
+    "name": "GRITTY · Admiral",
+    "set": "approved_gritty_admiral",
+    "scale": 0.25,
+    "sourceStandingHeight": 76,
+    "gritty": true,
+    "suggestedFor": "GRITTY, the Admiral"
+  },
+  "gritty_captain": {
+    "name": "Pirate Captain",
+    "set": "approved_gritty_captain",
+    "scale": 0.25,
+    "sourceStandingHeight": 76,
+    "gritty": true,
+    "suggestedFor": "department captains"
+  },
+  "gritty_quartermaster": {
+    "name": "Quartermaster",
+    "set": "approved_gritty_quartermaster",
+    "scale": 0.25,
+    "sourceStandingHeight": 76,
+    "gritty": true,
+    "suggestedFor": "treasurers and managers"
+  },
+  "gritty_deckhand": {
+    "name": "Deckhand",
+    "set": "approved_gritty_deckhand",
+    "scale": 0.25,
+    "sourceStandingHeight": 76,
+    "gritty": true,
+    "suggestedFor": "producers and builders"
+  },
+  "gritty_navigator": {
+    "name": "Navigator",
+    "set": "approved_gritty_navigator",
+    "scale": 0.25,
+    "sourceStandingHeight": 76,
+    "gritty": true,
+    "suggestedFor": "researchers and analysts"
+  },
+  "gritty_gunner": {
+    "name": "Gunner",
+    "set": "approved_gritty_gunner",
+    "scale": 0.25,
+    "sourceStandingHeight": 76,
+    "gritty": true,
+    "suggestedFor": "QA and risk"
+  },
+  "gritty_corsair": {
+    "name": "Corsair",
+    "set": "approved_gritty_corsair",
+    "scale": 0.25,
+    "sourceStandingHeight": 76,
+    "gritty": true,
+    "suggestedFor": "writers and designers"
+  }
+}
