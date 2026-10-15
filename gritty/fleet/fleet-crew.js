@@ -25,7 +25,7 @@
 
   function rngFrom(str) { let h = 2166136261; for (let i = 0; i < str.length; i++) h = Math.imul(h ^ str.charCodeAt(i), 16777619); let s = h >>> 0 || 1; return () => { s = Math.imul(s ^ (s >>> 15), 2246822519) + 0x9e3779b9 | 0; s ^= s >>> 13; return ((s >>> 0) % 100000) / 100000; }; }
 
-  /* world: { decks:[{ y, x0, x1 }], ladderX, quarter:{ y, x0, x1 } | null }
+  /* world: { decks:[{ y, x0, x1 }], ladderX | ladders:[{ a, b, xa, xb }], quarter:{ y, x0, x1 } | null }
      crew:  [{ id, status, deck (home deck index, -1 = quarterdeck), homeX }] */
   function create(world, crew, opts) {
     opts = opts || {};
@@ -38,11 +38,31 @@
         facing: 'south', act: 'stand', path: [], wait: rnd() * 2, dist: 0, rnd, errand: null, settled: false });
     }
 
-    // waypoints from where the agent is to (deck, x): along the floor, up/down the ladder, along the floor
+    // Stairs and ladders. A painted ship lists its own (world.ladders: [{ a, b, xa, xb }] joins deck a at xa to deck b
+    // at xb, so a diagonal staircase is just xa ≠ xb); a drawn ship has one ladder at world.ladderX joining every deck.
+    const links = world.ladders || null;
+    function hops(from, to) {                                          // fewest flights from deck to deck (breadth first)
+      if (!links) return [{ from, to, xa: world.ladderX, xb: world.ladderX }];
+      const prev = new Map([[from, null]]), q = [from];
+      while (q.length) {
+        const d = q.shift(); if (d === to) break;
+        for (const l of links) {
+          const n = l.a === d ? l.b : l.b === d ? l.a : null;
+          if (n == null || prev.has(n)) continue;
+          prev.set(n, { d, xa: l.a === d ? l.xa : l.xb, xb: l.a === d ? l.xb : l.xa }); q.push(n);
+        }
+      }
+      if (!prev.has(to)) return null;
+      const out = []; for (let d = to; prev.get(d); d = prev.get(d).d) { const p = prev.get(d); out.unshift({ from: p.d, to: d, xa: p.xa, xb: p.xb }); }
+      return out;
+    }
+    // waypoints from where the agent is to (deck, x): along the floor, up/down each flight, along the floor
     function route(a, deck, x) {
-      const pts = [], b = bounds(deck), tx = Math.max(b.x0, Math.min(b.x1, x));
-      if (deck === a.deck || deck === -1 || a.deck === -1) pts.push({ x: tx, y: deckY(a.deck), deck: a.deck });
-      else { pts.push({ x: world.ladderX, y: deckY(a.deck), deck: a.deck }); pts.push({ x: world.ladderX, y: deckY(deck), deck, climb: true }); pts.push({ x: tx, y: deckY(deck), deck }); }
+      const pts = [], hs = deck === a.deck || deck === -1 || a.deck === -1 ? null : hops(a.deck, deck);
+      if (!hs) deck = a.deck;                                          // unreachable or same deck: stay on this floor
+      const b = bounds(deck), tx = Math.max(b.x0, Math.min(b.x1, x));
+      for (const h of hs || []) { pts.push({ x: h.xa, y: deckY(h.from), deck: h.from }); pts.push({ x: h.xb, y: deckY(h.to), deck: h.to, climb: true }); }
+      pts.push({ x: tx, y: deckY(deck), deck });
       a.path = pts;
     }
     function goal(a) {
@@ -89,7 +109,7 @@
         const p = a.path[0], climbing = !!p.climb, sp = (climbing ? CLIMB : WALK) * dt;
         const dx = p.x - a.x, dy = p.y - a.y, d = Math.hypot(dx, dy);
         a.act = climbing ? 'climb' : 'walk';
-        a.facing = climbing ? 'north' : dx > 0.3 ? 'east' : dx < -0.3 ? 'west' : a.facing;
+        a.facing = climbing ? (Math.abs(dx) > Math.abs(dy) * 0.6 ? (dx > 0 ? 'east' : 'west') : 'north') : dx > 0.3 ? 'east' : dx < -0.3 ? 'west' : a.facing;
         if (d <= sp) { a.x = p.x; a.y = p.y; a.deck = p.deck; a.dist += d; a.path.shift(); }
         else { a.x += dx / d * sp; a.y += dy / d * sp; a.dist += sp; }
       }
@@ -97,7 +117,7 @@
     // what to draw: frame track and index, for StarNet-format skins
     function frameOf(a, t) {
       if (a.act === 'walk') return { track: 'walk', dir: a.facing, i: Math.floor(a.dist / STRIDE) % 6 };
-      if (a.act === 'climb') return { track: 'walk', dir: 'north', i: Math.floor(a.dist / (STRIDE * 0.8)) % 6 };
+      if (a.act === 'climb') return { track: 'walk', dir: a.facing, i: Math.floor(a.dist / (STRIDE * 0.8)) % 6 };
       if (a.act === 'work') return { track: 'type', dir: 'north', i: Math.floor(t / 170) % 4 };
       if (a.act === 'sit') return { track: 'sit', dir: 'south', i: 0 };
       return { track: 'rot', dir: a.facing, i: 0 };

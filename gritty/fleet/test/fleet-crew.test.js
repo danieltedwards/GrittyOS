@@ -63,4 +63,22 @@ const run = (sim, seconds) => { for (let i = 0; i < seconds * 20; i++) sim.step(
   assert.equal(seen.size, 6, 'all six walk frames are used');
 }
 
+// a painted ship: decks at uneven heights joined by separate stairs, one of them diagonal
+{
+  const painted = { decks: [{ y: 100, x0: 50, x1: 500 }, { y: 160, x0: 40, x1: 520 }, { y: 230, x0: 80, x1: 480 }],
+    ladders: [{ a: 0, b: 1, xa: 300, xb: 240 }, { a: 1, b: 2, xa: 120, xb: 120 }], quarter: null };
+  const sim = Crew.create(painted, [{ id: 'p', status: 'running', deck: 2, homeX: 400 }]);
+  const p = sim.agents.get('p'); p.deck = 0; p.y = 100; p.x = 60;
+  const used = new Set();
+  for (let i = 0; i < 1200; i++) {
+    sim.step(0.05);
+    if (p.act === 'climb') used.add(p.y < 160 ? 'upper' : 'lower');
+    if (p.act === 'climb' && p.y < 160) assert.ok(p.x <= 300.01 && p.x >= 239.99, 'the upper flight runs between its two ends');
+    if (p.act === 'climb' && p.y > 160) assert.equal(Math.round(p.x), 120, 'the lower ladder is straight');
+  }
+  assert.deepEqual([...used].sort(), ['lower', 'upper'], 'takes both flights in turn');
+  assert.equal(p.deck, 2); assert.equal(p.y, 230); assert.equal(Math.round(p.x), 400); assert.equal(p.act, 'work');
+  sim.route(p, 7, 0); assert.equal(p.path.length, 1, 'an unknown deck keeps them on their own floor');
+}
+
 console.log('fleet-crew.test: OK');

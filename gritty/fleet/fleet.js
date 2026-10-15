@@ -58,7 +58,7 @@ const GrittyFleet = (() => {
         </label>
       </div>
       <div class="gf-stage" tabindex="0" aria-label="Drag to look around. Scroll, pinch or use the plus and minus buttons to zoom.">
-        <div class="gf-cam"><canvas width="${W}" height="${H}" aria-hidden="true"></canvas><div class="gf-hot"></div></div>
+        <div class="gf-cam"><canvas width="${W * S().RES}" height="${H * S().RES}" aria-hidden="true"></canvas><div class="gf-hot"></div></div>
         <div class="gf-zoom"><button type="button" data-zoom="out" aria-label="Zoom out">−</button><button type="button" data-zoom="in" aria-label="Zoom in">+</button><button type="button" data-zoom="fit">Fit</button></div>
         <p class="gf-status" role="status" aria-live="polite"></p>
         <div class="gf-pop" role="dialog" aria-label="Open crew member" hidden></div></div>
@@ -67,7 +67,7 @@ const GrittyFleet = (() => {
     const cv = $('canvas'), g = cv.getContext('2d'), hot = $('.gf-hot'), list = $('.gf-list'), pop = $('.gf-pop'), statusEl = $('.gf-status');
     const select = $('.gf-choice select');
     const renderer = S().createRenderer(cv);
-    const fx = { reduced, particles, flashes, pacer, now, ttl: HANDOFF_TTL, skinFor: opts.skinFor || null };
+    const fx = { reduced, particles, flashes, pacer, now, ttl: HANDOFF_TTL, skinFor: opts.skinFor || null, shipArt: opts.shipArt || null };
     select.value = crewChoice;
     select.addEventListener('change', () => { crewChoice = select.value; say('Crew clicks now open: ' + select.selectedOptions[0].textContent + '.'); });
     $('.gf-back').addEventListener('click', showFleet);
@@ -83,10 +83,16 @@ const GrittyFleet = (() => {
     /* ---------------- camera: pan and zoom, remembered per view ----------------
        The canvas and its button layer sit in one .gf-cam box that is translated and scaled together, so clicks stay
        exactly on the art at any zoom. Offsets are stored as fractions of the stage, so a resize keeps the view. */
+    let hotPainted = null;
+    if (opts.shipArt && opts.shipArt.preload) opts.shipArt.preload();
     const stage = $('.gf-stage'), camEl = $('.gf-cam'), cams = new Map(), ZMAX = 4;
     const camKey = () => view.kind === 'fleet' ? 'fleet' : 'ship:' + view.id;
     function defaultCam() {
       if (view.kind === 'fleet') return { z: 1, x: 0, y: 0 };
+      if (hotPainted) {                                      // a painted ship: fill the stage with the painting
+        const top = hotPainted.oy / H, z = 1 / (1 - top) * 0.94;
+        return clampCam({ z, x: 0.5 - 0.5 * z, y: 0.5 - (top + 1) / 2 * z });
+      }
       const z = 1.55, fx = 330 / W, fy = 182 / H;           // open on the decks, the crew big enough to read
       return clampCam({ z, x: 0.5 - fx * z, y: 0.5 - fy * z });
     }
@@ -206,7 +212,7 @@ const GrittyFleet = (() => {
     /* ---------------- layout: one source (fleet-scenes.js) for drawing AND for the buttons ---------------- */
     const fleetLayout = () => S().fleetLayout(fleet);
     function cutawayLayout(ship) {
-      const L = S().cutawayLayout(ship, input);
+      const L = S().cutawayLayout(ship, input, fx.shipArt ? fx.shipArt.get(ship.id) : null);
       L.items.forEach(it => { it.label = ship.name + ' ' + it.plate.toLowerCase(); if (it.kind === 'alert') it.sub = seaWords(ship); });
       return L;
     }
@@ -230,10 +236,11 @@ const GrittyFleet = (() => {
         return;
       }
       const ship = shipById(view.id), L = cutawayLayout(ship);
+      hotPainted = L.painted || null;
       bar.querySelector('h2').textContent = ship.name;
       $('.gf-sub').textContent = seaWords(ship) + ' · ' + ship.crew.length + ' crew' + (ship.sea.history.length ? ' · ' + ship.sea.history.length + ' past issue in the log' : '');
       $('.gf-back').hidden = false;
-      let html = L.decks.map(d => `<span class="gf-deck" style="left:${pct(Math.round(S().HL(d.y1)) + 14, W)};top:${pct(d.y0 + 2, H)}">${esc(d.name)} · ${esc(d.roomId)}</span>`).join('');
+      let html = L.decks.map(d => `<span class="gf-deck" style="left:${pct(d.labelX != null ? d.labelX : Math.round(S().HL(d.y1)) + 14, W)};top:${pct(d.y0 + 2, H)}">${esc(d.name)} · ${esc(d.roomId)}</span>`).join('');
       html += L.items.map((it, i) => `<button type="button" class="gf-spot gf-prop k-${it.kind}" data-item="${i}"
           style="left:${pct(it.x, W)};top:${pct(it.y, H)};width:${pct(it.w, W)};height:${pct(Math.max(it.h, 8), H)}"
           aria-label="${esc(it.label)}: ${esc(it.sub)}"><span class="gf-plate small"><b>${esc(it.plate)}</b><span>${esc(it.sub)}</span></span></button>`).join('');
@@ -261,6 +268,8 @@ const GrittyFleet = (() => {
       const t = now();
       if (view.kind === 'fleet') { renderer.drawFleet(fleet, input, t, fx); return; }
       const L = renderer.drawCutaway(shipById(view.id), input, t, fx);
+      // a ship's painting finished loading: its floor plan replaces the drawn one, so rebuild the buttons and camera
+      if (L && !!L.painted !== !!hotPainted) { buildHotspots(); cams.delete(camKey()); applyCam(); }
       // crew buttons follow their avatars around the ship
       if (L && L.crewRects) for (const r of L.crewRects) {
         const b = hot.querySelector('[data-agent="' + r.id + '"]'); if (!b) continue;

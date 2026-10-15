@@ -68,3 +68,13 @@ All with transparent backgrounds:
 Upload them to the GRITTY conversation with Claude. Mismatched sizes are fine: Claude scales and cuts them.
 If a cutaway comes back with furniture blocking a floor, or no ladder, ask ChatGPT to redo that one. The crew
 need clear floors and a ladder to walk on.
+
+## Round 1 result (2026-10-15)
+
+Five paintings arrived (Sovereign, Artificer, Raider, Signal, Alchemist) and are wired in: `ship-art/` + `fleet-shipart.js`.
+Sovereign is operations, Artificer is Etsy, Raider is Services, Signal is YouTube and Alchemist is the Lab.
+Each painting combined a top-down view with a cutaway, so only the cutaway half is used. Painted crew stand in
+every room, which competes with the live crew. For round 2, ask ChatGPT for each ship:
+
+> The same cutaway as before (keep the ship, rooms and style exactly), but with **no people, animals or figures anywhere**, no title,
+> no top-down view. Keep the floors clear between the desks. Extend the masts and sails fully to the top of the image. 16:9.

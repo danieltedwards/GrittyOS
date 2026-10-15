@@ -20,6 +20,7 @@ From: Claude (cloud session on the upstream fork). For: Codex and Dan, working i
 | `fleet/fleet-scenes.js` | The harbour and cutaway scenes at 640×360: baked layers, reflections, parallax sky, light pass | Yes |
 | `fleet/fleet-crew.js` | Crew simulation: walk to desks, wander, climb ladders, carry handoffs, all driven by real status | Yes |
 | `fleet/fleet-skins.js` | Loads StarNet-format skins (the agents' own station avatars) and sizes them for the ship | Yes |
+| `fleet/fleet-shipart.js` + `fleet/ship-art/*.webp` | The ChatGPT ship paintings and each one's measured floor plan (decks, stairs, cabin, hold, crew height) | Yes |
 | `fleet/fleet-doc.js` | Fleet layout document: berths, deck names, cosmetic props, crew stations; validated edits, undo | Yes |
 | `fleet/fleet.js` | Controller: views, click layer, crew chooser, narrow-screen list | Yes |
 | `fleet/preview-skins/gpt_captain/` | Dan's ChatGPT captain, sliced into StarNet frame names, for the preview | No (the PC already has it as a station skin) |
@@ -70,7 +71,7 @@ needed. There is no sound at all. Reduced motion stops all movement and keeps th
 ## How to wire it into the PC app (proposed steps for Codex)
 
 1. Copy the "ship it" files to `frontend/app/gritty-fleet/`. The packaged app 404s anything outside `frontend/`.
-2. In `frontend/index.html`, load `gritty-fleet/fleet.css`, then `fleet-model.js`, `fleet-doc.js`, `fleet-pixel.js`, `fleet-art.js`, `fleet-scenes.js`, `fleet-crew.js`, `fleet-skins.js`, `fleet.js`,
+2. In `frontend/index.html`, load `gritty-fleet/fleet.css`, then `fleet-model.js`, `fleet-doc.js`, `fleet-pixel.js`, `fleet-art.js`, `fleet-scenes.js`, `fleet-crew.js`, `fleet-skins.js`, `fleet-shipart.js`, `fleet.js`,
    **after** `gritty-os.js` and `stationui.js`.
 3. Write `frontend/app/gritty-fleet/fleet-source.js`, the one PC-specific file. Its job is
    `getInput()` returning `{ departments, roster, conveyors, evidence }` from `gritty-os-model.js` and
@@ -87,6 +88,8 @@ needed. There is no sound at all. Reduced motion stops all movement and keeps th
    const skinFor = id => { const a = App.agents().find(x => x.id === id), sk = a && DATA.SKINS[a.skin]; return sk ? skins.get(sk.set) : null; };
    ```
    Pass `skinFor` to `mount`. An agent with no loadable skin falls back to the drawn pirate.
+   Also pass `shipArt: GrittyShipArt.create({ base: 'gritty-fleet/ship-art/' })`. A department with no painting keeps the
+   drawn cutaway. If a painting is replaced, re-measure its floor plan in `fleet-shipart.js` (image pixels).
    For crew to carry work between stations, handoff evidence needs `fromAgent` and `toAgent`.
 5. Mount it as a **Fleet** tab or window in the command deck:
    `GrittyFleet.mount(el, { getInput, host: window, crewChoice: savedChoice, skinFor })`. Call `.refresh()` from the

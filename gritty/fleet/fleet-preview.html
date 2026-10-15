@@ -79,6 +79,7 @@ h3 { margin: 0; font: 400 24px/1 var(--plate); color: var(--brass); letter-spaci
 <script src="fleet-scenes.js"></script>
 <script src="fleet-crew.js"></script>
 <script src="fleet-skins.js"></script>
+<script src="fleet-shipart.js"></script>
 <script src="fleet-fixture.js"></script>
 <script src="fleet.js"></script>
 <script>
@@ -118,13 +119,15 @@ const POOL = ['approved_voidwizard', 'approved_astronaut', 'approved_plaguedocto
 const SKIN = { agent: 'gpt', drafter: 'gpt', 'service-lead': 'gpt', 'video-lead': 'gpt' };
 FX.roster.forEach((a, i) => { if (!SKIN[a.agentId]) SKIN[a.agentId] = POOL[i % POOL.length]; });
 function skinFor(id) { const s = SKIN[id]; return s === 'gpt' ? gptSkins.get('gpt_captain') : starnetSkins.get(s); }
+// Ship paintings made by ChatGPT, one per department (ship-art/); each has a measured floor plan in fleet-shipart.js.
+const shipArt = GrittyShipArt.create({ base: 'ship-art/' });
 let fleet;
 function start(reducedMotion) {
   if (fleet) fleet.destroy();
   fleet = GrittyFleet.mount(document.getElementById('fleet'), {
     host, crewChoice: 'ask', reducedMotion,
     getInput: () => ({ departments: FX.departments, roster: FX.roster, conveyors: FX.conveyors, evidence }),
-    skinFor
+    skinFor, shipArt
   });
   const deep = location.hash.replace('#', '');
   if (deep && FX.departments.some(d => d.id === deep)) fleet.showShip(deep);
