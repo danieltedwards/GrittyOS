@@ -1,0 +1,923 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>GRITTY OS Ship Preview</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Stencil+Display:wght@600;800&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a fixed command bar over a full-bleed ship cutaway; department workspaces and crew dossiers
+   slide over the ship as a back-navigable stack, so closing one returns to the exact prior context.
+   Single deliberate dark look (a ship interior at night watch): charcoal steel, weathered brass, amber, a little teal. */
+:root {
+  color-scheme: dark;
+  --void: #0d0f12;          /* space behind the hull */
+  --hull: #1b1f24;          /* outer plating */
+  --deck: #23282e;          /* room floors and panels */
+  --plate: #2c323a;         /* raised panels, inputs */
+  --rivet: #3b434d;         /* rules, borders */
+  --steel: #8f9aa6;         /* secondary text */
+  --ink: #e6e1d6;           /* primary text, warm off-white */
+  --brass: #c49a52;         /* the accent: weathered brass */
+  --brass-dim: #7d6538;
+  --amber: #e2a336;         /* waiting / attention */
+  --teal: #4fb3a9;          /* working / healthy, used sparingly */
+  --rust: #c8553d;          /* blocked / failed */
+  --violet: #9a8fd1;        /* waiting on Dan's approval */
+  --fixture: #3a2f17;       /* demo-data band */
+  --display: "Big Shoulders Stencil Display", "Arial Narrow", Impact, sans-serif;
+  --body: "Barlow", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0; background: var(--void); color: var(--ink); font: 15px/1.5 var(--body);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+h1, h2, h3 { font-family: var(--display); font-weight: 800; letter-spacing: .04em; text-wrap: balance; margin: 0; }
+.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.label { font: 600 11px/1.2 var(--body); letter-spacing: .12em; text-transform: uppercase; color: var(--steel); }
+
+/* ---------- fixture band + command bar ---------- */
+.fixture-band {
+  background: var(--fixture); color: var(--amber); font: 600 12px/1.3 var(--body); letter-spacing: .06em;
+  padding-block: 6px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  border-bottom: 1px solid var(--brass-dim);
+}
+.cmdbar {
+  display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+  padding-block: 10px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  background: var(--hull); border-bottom: 1px solid var(--rivet);
+}
+.wordmark { display: flex; align-items: baseline; gap: 8px; }
+.wordmark b { font: 800 26px/1 var(--display); letter-spacing: .08em; color: var(--brass); }
+.wordmark span { font: 600 11px/1 var(--mono); color: var(--steel); }
+.nav { display: flex; gap: 4px; flex-wrap: wrap; }
+.nav button {
+  background: none; border: 1px solid transparent; border-radius: 3px; padding: 6px 10px; cursor: pointer;
+  font: 600 12px/1 var(--body); letter-spacing: .1em; text-transform: uppercase; color: var(--steel);
+}
+.nav button:hover { color: var(--ink); border-color: var(--rivet); }
+.nav button[aria-current="page"] { color: var(--brass); border-color: var(--brass-dim); background: var(--deck); }
+.nav .count { color: var(--violet); margin-left: 4px; }
+.conn { margin-left: auto; display: flex; align-items: center; gap: 8px; font: 12px/1 var(--mono); color: var(--steel); }
+.conn i { width: 8px; height: 8px; border-radius: 50%; background: var(--amber); display: inline-block; }
+
+/* ---------- main: ship stage ---------- */
+main { flex: 1; min-height: 0; position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 320px; }
+.stage { position: relative; min-width: 0; min-height: 0; overflow: hidden;
+  background:
+    radial-gradient(1px 1px at 12% 18%, #ffffff40 50%, transparent 51%),
+    radial-gradient(1px 1px at 38% 72%, #ffffff30 50%, transparent 51%),
+    radial-gradient(1px 1px at 71% 12%, #ffffff35 50%, transparent 51%),
+    radial-gradient(1px 1px at 88% 64%, #ffffff28 50%, transparent 51%),
+    radial-gradient(1px 1px at 56% 40%, #ffffff20 50%, transparent 51%),
+    var(--void);
+}
+.stage svg { width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
+.stage svg.dragging { cursor: grabbing; }
+.camera { position: absolute; right: 12px; bottom: 12px; display: flex; gap: 6px; }
+.camera button, .btn {
+  background: var(--plate); border: 1px solid var(--rivet); border-radius: 3px; padding: 7px 11px; cursor: pointer;
+  font: 600 12px/1 var(--body); letter-spacing: .08em; text-transform: uppercase;
+}
+.camera button:hover, .btn:hover { border-color: var(--brass-dim); color: var(--brass); }
+.btn.primary { background: var(--brass); color: #1b1408; border-color: var(--brass); }
+.btn.primary:hover { color: #1b1408; filter: brightness(1.1); }
+.btn[disabled] { opacity: .45; cursor: not-allowed; }
+.legend { position: absolute; left: 12px; bottom: 12px; display: flex; gap: 12px; flex-wrap: wrap; font: 12px/1 var(--body); color: var(--steel); max-width: 60%; }
+.legend span { display: flex; align-items: center; gap: 5px; }
+
+/* SVG ship styling */
+.hull-plate { fill: var(--hull); stroke: #4a525c; stroke-width: 3; }
+.hull-seam { stroke: var(--rivet); stroke-width: 1; fill: none; stroke-dasharray: 2 6; }
+.spine { fill: #191c20; stroke: var(--rivet); }
+.room rect, .room path { fill: var(--deck); stroke: var(--rivet); stroke-width: 2; transition: stroke .15s, fill .15s; }
+.room { cursor: pointer; outline: none; }
+.room:hover rect, .room:hover path, .room:focus-visible rect, .room:focus-visible path { stroke: var(--brass); fill: #2a2f36; }
+.room.selected rect, .room.selected path { stroke: var(--brass); stroke-width: 3; }
+.room.expansion rect { fill: #181b1f; stroke-dasharray: 6 5; }
+.room-name { font: 800 16px var(--display); letter-spacing: .08em; fill: var(--ink); pointer-events: none; }
+.room-sub { font: 500 10.5px var(--body); letter-spacing: .1em; fill: var(--steel); pointer-events: none; text-transform: uppercase; }
+.room-alert { font: 600 10.5px var(--mono); pointer-events: none; }
+.furn { fill: #30363e; stroke: #3d454f; stroke-width: 1; pointer-events: none; }
+.brassline { stroke: var(--brass-dim); stroke-width: 1.5; fill: none; pointer-events: none; }
+.engine { fill: #2a2f35; stroke: #4a525c; stroke-width: 2; }
+.flame { fill: var(--amber); opacity: .55; }
+.crew { cursor: pointer; }
+.crew circle.body { stroke-width: 2.5; fill: #14171b; }
+.crew text { font: 700 9px var(--mono); fill: var(--ink); pointer-events: none; }
+.crew:hover circle.body, .crew:focus-visible circle.body { stroke: var(--brass) !important; }
+.belt { stroke: #3d454f; stroke-width: 6; stroke-linecap: round; }
+.belt-tick { stroke: #555e69; stroke-width: 6; stroke-dasharray: 2 8; }
+.token { cursor: pointer; }
+@media (prefers-reduced-motion: no-preference) {
+  .flame { animation: flicker 2.4s ease-in-out infinite; }
+  .working-ring { animation: breathe 2.8s ease-in-out infinite; }
+}
+@keyframes flicker { 50% { opacity: .3; } }
+@keyframes breathe { 50% { opacity: .35; } }
+
+/* ---------- side rail (ship status) ---------- */
+.rail { border-left: 1px solid var(--rivet); background: var(--hull); overflow-y: auto; min-height: 0; display: flex; flex-direction: column; }
+.rail section { padding: 14px 16px; border-bottom: 1px solid var(--rivet); display: flex; flex-direction: column; gap: 10px; }
+.rail h2 { font-size: 20px; color: var(--brass); }
+.dept-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.dept-list button {
+  width: 100%; display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; align-items: center; text-align: left;
+  background: none; border: 1px solid transparent; border-radius: 3px; padding: 7px 8px; cursor: pointer;
+}
+.dept-list button:hover { background: var(--deck); border-color: var(--rivet); }
+.dept-list .nm { font: 600 14px/1.2 var(--body); }
+.dept-list .meta { grid-column: 1 / -1; font-size: 12px; color: var(--steel); }
+
+/* status chips: shape + label, never colour alone */
+.chip { display: inline-flex; align-items: center; gap: 5px; font: 600 11px/1 var(--body); letter-spacing: .06em; text-transform: uppercase;
+  padding: 4px 7px; border-radius: 2px; border: 1px solid currentColor; white-space: nowrap; }
+.chip::before { content: ""; width: 7px; height: 7px; background: currentColor; }
+.s-running { color: var(--teal); } .s-running::before { border-radius: 50%; }
+.s-review { color: var(--amber); } .s-review::before { clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+.s-approval { color: var(--violet); } .s-approval::before { transform: rotate(45deg); }
+.s-blocked, .s-failed { color: var(--rust); } .s-blocked::before, .s-failed::before { clip-path: polygon(20% 0, 100% 0, 80% 100%, 0 100%); }
+.s-queued, .s-idle { color: var(--steel); } .s-idle::before { border-radius: 50%; background: none; border: 1.5px solid currentColor; }
+.s-offline, .s-unknown { color: #6a7480; } .s-offline::before { background: none; border: 1.5px dashed currentColor; }
+.s-done { color: #9fb98a; } .s-done::before { border-radius: 1px; }
+.s-notconn { color: #6a7480; border-style: dashed; } .s-notconn::before { background: none; border: 1.5px dashed currentColor; border-radius: 50%; }
+
+/* ---------- overlay stack (workspaces + dossiers) ---------- */
+.overlay { position: absolute; inset: 0; display: flex; justify-content: flex-end; background: #0d0f12a6; }
+.overlay[hidden] { display: none; }
+.sheet {
+  width: min(1180px, 94%); height: 100%; background: var(--hull); border-left: 2px solid var(--brass-dim);
+  display: flex; flex-direction: column; min-width: 0; box-shadow: -18px 0 40px #00000080;
+}
+.sheet.dossier { width: min(1060px, 90%); }
+@media (prefers-reduced-motion: no-preference) { .sheet { animation: slidein .18s ease-out; } }
+@keyframes slidein { from { transform: translateX(28px); opacity: .6; } }
+.sheet-head { display: flex; align-items: flex-start; gap: 14px; padding: 14px 20px 12px; border-bottom: 1px solid var(--rivet); flex-wrap: wrap; }
+.crumbs { display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--steel); flex-wrap: wrap; }
+.crumbs button { background: none; border: none; padding: 0; color: var(--brass); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.sheet-title { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; }
+.sheet-title h2 { font-size: 32px; line-height: 1; }
+.sheet-tools { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.close { background: var(--plate); border: 1px solid var(--rivet); border-radius: 3px; width: 34px; height: 34px; cursor: pointer; font-size: 18px; line-height: 1; }
+.tabs { display: flex; gap: 2px; padding: 0 20px; border-bottom: 1px solid var(--rivet); overflow-x: auto; }
+.tabs button { background: none; border: none; border-bottom: 2px solid transparent; padding: 10px 12px; cursor: pointer; white-space: nowrap;
+  font: 600 12px/1 var(--body); letter-spacing: .1em; text-transform: uppercase; color: var(--steel); }
+.tabs button[aria-selected="true"] { color: var(--brass); border-bottom-color: var(--brass); }
+.sheet-body { flex: 1; min-height: 0; overflow-y: auto; padding: 18px 20px 28px; display: flex; flex-direction: column; gap: 18px; }
+
+/* unit switcher */
+.units { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; }
+.unit { text-align: left; background: var(--deck); border: 1px solid var(--rivet); border-radius: 3px; padding: 10px 12px; cursor: pointer; display: flex; flex-direction: column; gap: 6px; }
+.unit:hover { border-color: var(--brass-dim); }
+.unit[aria-pressed="true"] { border-color: var(--brass); box-shadow: inset 0 0 0 1px var(--brass); }
+.unit .nm { font: 600 15px/1.2 var(--body); }
+.unit .meta { font-size: 12px; color: var(--steel); }
+
+/* summary strip */
+.summary { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); border: 1px solid var(--rivet); border-radius: 3px; background: var(--deck); }
+.summary > div { padding: 10px 12px; border-right: 1px solid var(--rivet); display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.summary > div:last-child { border-right: none; }
+.summary .v { font: 600 24px/1.1 var(--mono); }
+.summary .src { font-size: 11px; color: var(--steel); }
+
+.grid2 { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+.panel { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.panel-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; border-bottom: 1px solid var(--rivet); padding-bottom: 6px; }
+.panel-head h3 { font-size: 20px; color: var(--ink); }
+
+/* conveyor */
+.conveyor { overflow-x: auto; }
+.stages { display: grid; grid-template-columns: repeat(6, minmax(140px, 1fr)); gap: 8px; min-width: 860px; }
+.stage-col { background: #1e2227; border: 1px solid var(--rivet); border-radius: 3px; padding: 8px; display: flex; flex-direction: column; gap: 8px; min-height: 120px; }
+.stage-col header { display: flex; justify-content: space-between; font: 600 11px/1.2 var(--body); letter-spacing: .1em; text-transform: uppercase; color: var(--steel); }
+.stage-col header b { color: var(--brass); font-family: var(--mono); }
+.task { text-align: left; background: var(--plate); border: 1px solid var(--rivet); border-left: 3px solid var(--steel); border-radius: 2px; padding: 8px; cursor: pointer; display: flex; flex-direction: column; gap: 5px; }
+.task:hover { border-color: var(--brass-dim); }
+.task.t-running { border-left-color: var(--teal); } .task.t-review { border-left-color: var(--amber); }
+.task.t-approval { border-left-color: var(--violet); } .task.t-blocked, .task.t-failed { border-left-color: var(--rust); }
+.task .t { font: 600 13px/1.25 var(--body); }
+.task .m { font: 11px/1.3 var(--mono); color: var(--steel); }
+
+.rows { display: flex; flex-direction: column; border: 1px solid var(--rivet); border-radius: 3px; background: var(--deck); }
+.row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; padding: 10px 12px; border-bottom: 1px solid var(--rivet); align-items: center; }
+.row:last-child { border-bottom: none; }
+.row .t { font-weight: 600; }
+.row .m { grid-column: 1 / -1; font-size: 12.5px; color: var(--steel); }
+.row .acts { grid-column: 1 / -1; display: flex; gap: 8px; flex-wrap: wrap; }
+button.row { width: 100%; text-align: left; background: none; border: none; border-bottom: 1px solid var(--rivet); cursor: pointer; }
+button.row:hover { background: var(--plate); }
+
+/* outputs */
+.outputs { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
+.out { background: var(--deck); border: 1px solid var(--rivet); border-radius: 3px; overflow: hidden; display: flex; flex-direction: column; text-align: left; cursor: pointer; padding: 0; }
+.out:hover { border-color: var(--brass-dim); }
+.thumb { aspect-ratio: 4 / 3; max-width: 100%; background: #e9e3d3; position: relative; overflow: hidden; }
+.thumb .pg { position: absolute; background: #fbf8f1; box-shadow: 0 2px 6px #0004; }
+.thumb .ln { position: absolute; height: 3px; background: #b9ad92; }
+.out .cap { padding: 8px 10px; display: flex; flex-direction: column; gap: 4px; }
+.out .cap b { font-size: 13px; }
+.out .cap span { font: 11px/1.3 var(--mono); color: var(--steel); }
+
+/* crew mini cards */
+.crewgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.crewcard { display: grid; grid-template-columns: 40px 1fr; gap: 4px 10px; align-items: center; text-align: left; background: var(--deck); border: 1px solid var(--rivet); border-radius: 3px; padding: 10px; cursor: pointer; }
+.crewcard:hover { border-color: var(--brass-dim); }
+.crewcard .nm { font: 600 13px/1.2 var(--mono); }
+.crewcard .meta { grid-column: 1 / -1; font-size: 12px; color: var(--steel); }
+.avatar { width: 40px; height: 40px; }
+
+/* metric table */
+.mtable { width: 100%; border-collapse: collapse; font-size: 13px; }
+.mtable th, .mtable td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--rivet); vertical-align: top; }
+.mtable th { font: 600 11px/1.2 var(--body); letter-spacing: .1em; text-transform: uppercase; color: var(--steel); }
+.mtable td.num { font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tablewrap { overflow-x: auto; border: 1px solid var(--rivet); border-radius: 3px; background: var(--deck); }
+
+/* dossier */
+.dossier-body { display: grid; grid-template-columns: 300px minmax(0, 1fr); flex: 1; min-height: 0; }
+.idcol { border-right: 1px solid var(--rivet); padding: 18px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; background: #181b20; }
+.portrait .avatar { width: 100%; height: 100%; display: block; }
+.portrait { width: 100%; max-width: 260px; aspect-ratio: 1; border: 2px solid var(--brass-dim); border-radius: 3px; background: #14171b; }
+.idcol h2 { font-size: 34px; line-height: .95; color: var(--brass); word-break: break-word; }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; font-size: 13px; margin: 0; }
+.kv dt { color: var(--steel); font: 600 11px/1.6 var(--body); letter-spacing: .1em; text-transform: uppercase; }
+.kv dd { margin: 0; min-width: 0; }
+.workcol { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.statusline { padding: 14px 20px; border-bottom: 1px solid var(--rivet); font-size: 16px; line-height: 1.45; background: #1f2328; }
+.statusline b { color: var(--brass); font-family: var(--mono); font-weight: 600; }
+.stagebar { display: flex; gap: 4px; flex-wrap: wrap; }
+.stagebar span { flex: 1 1 90px; font: 600 11px/1.2 var(--body); letter-spacing: .06em; text-transform: uppercase; padding: 7px 8px; background: var(--plate); color: var(--steel); border-top: 3px solid var(--rivet); }
+.stagebar span.done { border-top-color: #9fb98a; color: var(--ink); }
+.stagebar span.now { border-top-color: var(--teal); color: var(--ink); background: #24332f; }
+.events { list-style: none; margin: 0; padding: 0; border-left: 2px solid var(--rivet); display: flex; flex-direction: column; gap: 10px; }
+.events li { padding-left: 14px; position: relative; font-size: 13.5px; }
+.events li::before { content: ""; position: absolute; left: -6px; top: 6px; width: 10px; height: 10px; background: var(--deck); border: 2px solid var(--brass-dim); }
+.events time { font: 11px var(--mono); color: var(--steel); display: block; }
+.note { font-size: 13px; color: var(--steel); border-left: 2px solid var(--brass-dim); padding-left: 10px; max-width: 70ch; }
+.field { display: flex; flex-direction: column; gap: 4px; }
+.field label { font: 600 11px/1.2 var(--body); letter-spacing: .1em; text-transform: uppercase; color: var(--steel); }
+.field input, .field select, .field textarea { background: var(--plate); border: 1px solid var(--rivet); border-radius: 2px; padding: 8px; color: var(--ink); font: 14px var(--body); }
+.formgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.health { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
+.health button { text-align: left; background: var(--deck); border: 1px solid var(--rivet); border-radius: 3px; padding: 10px; cursor: pointer; display: flex; flex-direction: column; gap: 6px; }
+.health button:hover { border-color: var(--brass-dim); }
+.incident { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; font-size: 13px; }
+.incident > div { background: var(--plate); padding: 8px 10px; border-radius: 2px; min-width: 0; }
+.toast { position: absolute; left: 50%; bottom: 20px; transform: translateX(-50%); background: var(--plate); border: 1px solid var(--brass); padding: 10px 14px; border-radius: 3px; font-size: 13px; max-width: 90%; z-index: 5; }
+
+/* ---------- narrow screens: dashboard-first ---------- */
+@media (max-width: 900px) {
+  main { grid-template-columns: 1fr; grid-template-rows: minmax(220px, 42%) 1fr; }
+  .rail { border-left: none; border-top: 1px solid var(--rivet); }
+  .legend { display: none; }
+  .sheet, .sheet.dossier { width: 100%; border-left: none; }
+  .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .summary > div { border-bottom: 1px solid var(--rivet); }
+  .grid2 { grid-template-columns: 1fr; }
+  .dossier-body { grid-template-columns: 1fr; overflow-y: auto; }
+  .idcol { border-right: none; border-bottom: 1px solid var(--rivet); display: grid; grid-template-columns: 96px 1fr; align-items: start; overflow: visible; }
+  .idcol .portrait { grid-row: span 2; }
+  .idcol > .wide { grid-column: 1 / -1; }
+  .workcol { min-height: auto; }
+  .incident { grid-template-columns: 1fr 1fr; }
+  .conn, .wordmark span { display: none; }
+  .cmdbar { gap: 8px 14px; }
+  .sheet-title h2 { font-size: 26px; }
+}
+</style>
+</head>
+<body>
+<div class="fixture-band" role="note">DESIGN PREVIEW · every store, task, number and agent state below is DEMO FIXTURE data, not your live ship. Proposed layout and palette, open for correction.</div>
+<header class="cmdbar">
+  <div class="wordmark"><b>GRITTY OS</b><span>preview · build gritty-proto-0</span></div>
+  <nav class="nav" aria-label="Primary">
+    <button type="button" data-route="ship" aria-current="page">Ship</button>
+    <button type="button" data-route="departments">Departments</button>
+    <button type="button" data-route="crew">Crew</button>
+    <button type="button" data-route="approvals">Approvals<span class="count mono" id="apprCount"></span></button>
+    <button type="button" data-route="gritty">GRITTY</button>
+  </nav>
+  <div class="conn" title="Runtime connection state"><i aria-hidden="true"></i>fixture · not connected to a runtime</div>
+</header>
+<main>
+  <div class="stage" id="stage">
+    <svg id="ship" viewBox="0 0 1200 520" role="img" aria-label="Ship cutaway. Select a compartment to open its department workspace."></svg>
+    <div class="legend" aria-hidden="true">
+      <span><span class="chip s-running">Working</span></span>
+      <span><span class="chip s-review">Review</span></span>
+      <span><span class="chip s-approval">Your approval</span></span>
+      <span><span class="chip s-blocked">Blocked</span></span>
+      <span><span class="chip s-idle">Idle</span></span>
+    </div>
+    <div class="camera">
+      <button type="button" id="zoomOut" aria-label="Zoom out">−</button>
+      <button type="button" id="zoomIn" aria-label="Zoom in">+</button>
+      <button type="button" id="fitShip">Fit ship</button>
+    </div>
+  </div>
+  <aside class="rail" id="rail" aria-label="Ship status"></aside>
+  <div class="overlay" id="overlay" hidden></div>
+</main>
+
+<script>
+'use strict';
+/* ====================================================================================================
+   FIXTURE — shaped like the proposed gritty view-model contract (gritty/ARCHITECTURE_PROPOSAL.md §6).
+   Every value here is invented for the design review. The real adapter would project these records
+   from the sidecar's existing authorities (roster, workstreams, deliverables, consent, spend).
+   ==================================================================================================== */
+const FX = {
+  asOf: '2026-10-15 09:40 ET',
+  stagesEtsy: ['Brief', 'Build', 'Visuals & copy', 'QA', 'Release', 'Review'],
+  departments: [
+    { id: 'bridge', name: 'Command Bridge', fn: 'GRITTY oversight', lead: 'gritty', health: 'attention', note: '2 open escalations · 1 decision waiting' },
+    { id: 'research', name: 'Chart Room', fn: 'Research & opportunities', lead: 'scout', health: 'ok', note: '3 evidence cards this week' },
+    { id: 'etsy', name: 'Etsy Bay', fn: 'Production · Etsy', lead: 'etsy-lead', health: 'attention', note: '5 in flight · 1 blocked · 1 needs you' },
+    { id: 'youtube', name: 'Studio Bay', fn: 'Production · YouTube', lead: null, health: 'inactive', note: 'Not activated · no channel connected' },
+    { id: 'fiverr', name: 'Contract Bay', fn: 'Production · Fiverr', lead: null, health: 'inactive', note: 'Not activated · no seller account linked' },
+    { id: 'lab', name: 'Market Lab', fn: 'Offline research only', lead: null, health: 'inactive', note: 'Historical data only · no live trading' },
+    { id: 'cargo', name: 'Cargo Hold', fn: 'Outputs & archive', lead: null, health: 'ok', note: '4 accepted outputs this week' },
+    { id: 'comms', name: 'Signal Room', fn: 'Telegram & notifications', lead: 'tele', health: 'ok', note: 'Telegram: state unknown in preview' },
+    { id: 'engineering', name: 'Engine Room', fn: 'Runtime, models, costs', lead: null, health: 'ok', note: 'Spend this week $3.84 (fixture)' },
+    { id: 'expansion', name: 'Open Bay', fn: 'Reserved for a future unit', lead: null, health: 'empty', note: 'No unit assigned' }
+  ],
+  units: {
+    etsy: [
+      { id: 'u-brass', name: 'Brassbound Planners', platform: 'Etsy shop (example)', state: 'active', note: 'Printable planners · 4 tasks in flight' },
+      { id: 'u-nebula', name: 'Nebula Print Co.', platform: 'Etsy shop (example)', state: 'experimental', note: 'Star-map wall art · experiment week 1 of 4' }
+    ]
+  },
+  crew: [
+    { id: 'gritty', name: 'GRITTY', role: 'Resolve escalations and portfolio decisions', dept: 'bridge', status: 'idle', model: 'Station default', at: [960, 260], kind: 'overseer' },
+    { id: 'scout', name: 'SCOUT', role: 'Collect sourced opportunity evidence', dept: 'research', status: 'idle', model: 'Economical model (unbenchmarked)', at: [826, 198] },
+    { id: 'strategist', name: 'STRATEGIST', role: 'Validate bounded business experiments', dept: 'research', status: 'review', model: 'Station default', at: [868, 198] },
+    { id: 'tele', name: 'TELE', role: 'Format operational updates for Dan', dept: 'comms', status: 'idle', model: 'Code template + economical model', at: [375, 345] },
+    { id: 'etsy-lead', name: 'ETSY-LEAD', role: 'Allocate the approved product queue', dept: 'etsy', status: 'idle', model: 'Station default', at: [478, 172] },
+    { id: 'etsy-builder', name: 'ETSY-BUILDER', role: 'Produce the sellable product', dept: 'etsy', status: 'running', model: 'Station default', at: [512, 172] },
+    { id: 'etsy-visual', name: 'ETSY-VISUAL', role: 'Produce its visual presentation', dept: 'etsy', status: 'blocked', model: 'Needs an image tool', at: [546, 172] },
+    { id: 'etsy-copy', name: 'ETSY-COPY', role: 'Write its listing package', dept: 'etsy', status: 'idle', model: 'Economical model (unbenchmarked)', at: [580, 172] },
+    { id: 'etsy-qa', name: 'ETSY-QA', role: 'Independently verify the release package', dept: 'etsy', status: 'running', model: 'Station default', at: [495, 200] },
+    { id: 'etsy-perf', name: 'ETSY-PERF', role: 'Interpret observed product and store results', dept: 'etsy', status: 'offline', model: 'Not activated', at: [592, 200] }
+  ],
+  tasks: [
+    { id: 'T-1042', title: 'Holiday Budget Planner', unit: 'u-brass', stage: 1, status: 'running', owner: 'etsy-builder', age: '42m', next: 'Visuals & copy', blocker: null, ver: 'v1 (draft)' },
+    { id: 'T-1039', title: 'Meal Prep Weekly Planner', unit: 'u-brass', stage: 3, status: 'running', owner: 'etsy-qa', age: '1h 05m', next: 'Release', blocker: null, ver: 'v2', qaCycle: '2 of 2 correction cycles used' },
+    { id: 'T-1036', title: 'Habit Tracker Bundle', unit: 'u-brass', stage: 4, status: 'approval', owner: 'dan', age: '3h 10m', next: 'Manual upload to Etsy', blocker: 'Waiting for your approval of listing package v3', ver: 'v3' },
+    { id: 'T-1031', title: 'Wedding Day Checklist', unit: 'u-brass', stage: 2, status: 'blocked', owner: 'etsy-visual', age: '1d 2h', next: 'QA', blocker: 'No image-generation tool is connected. Mockups need a manual step or a tool grant.', ver: 'v1' },
+    { id: 'T-1044', title: 'Celestial Map Print Set', unit: 'u-nebula', stage: 0, status: 'queued', owner: 'etsy-lead', age: '18m', next: 'Build', blocker: null, ver: '—' },
+    { id: 'T-1028', title: 'Student Semester Planner', unit: 'u-brass', stage: 5, status: 'done', owner: 'etsy-perf', age: '6d', next: 'Performance review (sales source not connected)', blocker: null, ver: 'v4 released' }
+  ],
+  outputs: [
+    { id: 'A-311', task: 'T-1036', title: 'Habit Tracker Bundle — listing package', ver: 'v3', qa: 'QA passed', state: 'Waiting for approval', kind: 'planner' },
+    { id: 'A-309', task: 'T-1039', title: 'Meal Prep Weekly Planner — PDF', ver: 'v2', qa: 'In QA (cycle 2)', state: 'Draft', kind: 'grid' },
+    { id: 'A-305', task: 'T-1042', title: 'Holiday Budget Planner — PDF', ver: 'v1', qa: 'Not yet reviewed', state: 'In production', kind: 'ledger' },
+    { id: 'A-290', task: 'T-1028', title: 'Student Semester Planner — release', ver: 'v4', qa: 'QA passed', state: 'Released manually 6d ago', kind: 'planner' }
+  ],
+  approvals: [
+    { id: 'AP-77', task: 'T-1036', what: 'Approve listing package v3 for manual upload', scope: 'Brassbound Planners · Etsy', binds: 'Artifact A-311 version v3 only. A revision voids this approval.', by: 'ETSY-QA passed it (author was ETSY-COPY).' }
+  ],
+  incidents: [
+    { id: 'INC-12', title: 'ETSY-VISUAL blocked for 26 hours', evidence: 'T-1031 halted at Visuals & copy. No image tool in the agent\'s grant set.', decision: 'Asked Dan: grant an image tool, or switch T-1031 to manual mockups.', outcome: 'Open · waiting on Dan', state: 'blocked' },
+    { id: 'INC-11', title: 'Meal Prep Planner failed QA twice', evidence: 'QA receipts R-88 and R-91: page margins outside the printable area.', decision: 'Hold the third cycle; escalate instead of looping.', outcome: 'Open · cap reached, needs a decision', state: 'review' },
+    { id: 'INC-09', title: 'Duplicate morning digest', evidence: 'Two TELE runs within 3 minutes after a restart.', decision: 'Deduplicated on digest date; added to the health sweep.', outcome: 'Resolved 2d ago · no repeat since', state: 'done' }
+  ],
+  decisions: [
+    { id: 'D-21', what: 'Continue Nebula Print Co. experiment into week 2?', evidence: 'STRATEGIST card: 0 listings live yet. Spend $0.61 of $5.00 ceiling.', due: 'Review due Fri 17 Oct' }
+  ]
+};
+const STAGE_STATUS = {
+  running: ['s-running', 'Working'], review: ['s-review', 'Waiting review'], approval: ['s-approval', 'Needs your approval'],
+  blocked: ['s-blocked', 'Blocked'], failed: ['s-failed', 'Failed'], queued: ['s-queued', 'Queued'], idle: ['s-idle', 'Idle'],
+  offline: ['s-offline', 'Not activated'], done: ['s-done', 'Completed'], unknown: ['s-unknown', 'Unknown']
+};
+const STROKE = { running: 'var(--teal)', review: 'var(--amber)', approval: 'var(--violet)', blocked: 'var(--rust)', idle: 'var(--steel)', offline: '#55606b', queued: 'var(--steel)' };
+const $ = (s, r = document) => r.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const chip = st => { const [c, l] = STAGE_STATUS[st] || STAGE_STATUS.unknown; return `<span class="chip ${c}">${l}</span>`; };
+const crewById = id => FX.crew.find(c => c.id === id);
+const deptById = id => FX.departments.find(d => d.id === id);
+const ownerName = id => id === 'dan' ? 'You (Dan)' : (crewById(id) || {}).name || id;
+
+/* ====================================================================================================
+   SHIP — hand-laid cutaway. Bow (bridge) to the right, stern (engines) to the left, one spine corridor.
+   Room geometry is the kind of data the versioned layout file would hold (id, bounds, label, dept).
+   ==================================================================================================== */
+const ROOMS = [
+  { id: 'engineering', tag: 'Runtime · costs', d: 'M110 160 L290 160 L290 360 L110 360 L96 330 L96 190 Z', lx: 128, ly: 190 },
+  { id: 'cargo', tag: 'Outputs', r: [305, 112, 140, 126] }, { id: 'etsy', tag: 'Etsy production', r: [455, 112, 160, 126] },
+  { id: 'youtube', tag: 'YouTube production', r: [625, 112, 160, 126] }, { id: 'research', tag: 'Research', r: [795, 126, 108, 112] },
+  { id: 'comms', tag: 'Telegram', r: [305, 282, 140, 126] }, { id: 'fiverr', tag: 'Fiverr production', r: [455, 282, 160, 126] },
+  { id: 'expansion', tag: 'Future unit', r: [625, 282, 160, 126] }, { id: 'lab', tag: 'Offline only', r: [795, 282, 108, 108] },
+  { id: 'bridge', tag: 'GRITTY oversight', d: 'M908 178 L995 178 L1098 260 L995 342 L908 342 Z', lx: 922, ly: 205 }
+];
+const SVGNS = 'http://www.w3.org/2000/svg';
+function shipSVG() {
+  const furn = [
+    // engine room: reactor drum + pipework
+    '<circle class="furn" cx="200" cy="300" r="34"/><circle class="furn" cx="200" cy="300" r="18"/><path class="brassline" d="M234 300 H286 M200 266 V238 H286"/>',
+    // cargo: crates
+    '<rect class="furn" x="318" y="190" width="26" height="26"/><rect class="furn" x="348" y="196" width="20" height="20"/><rect class="furn" x="410" y="186" width="26" height="30"/>',
+    // studio: camera rig
+    '<rect class="furn" x="690" y="170" width="44" height="30"/><circle class="furn" cx="660" cy="190" r="10"/>',
+    // chart room: plotting table
+    '<rect class="furn" x="812" y="214" width="74" height="16"/><path class="brassline" d="M820 222 l14 -4 l12 6 l18 -5"/>',
+    // signal room: dish console
+    '<path class="furn" d="M410 360 a22 22 0 0 1 30 -22 z"/><rect class="furn" x="318" y="370" width="50" height="12"/>',
+    // contract bay: desks
+    '<rect class="furn" x="470" y="360" width="46" height="14"/><rect class="furn" x="552" y="360" width="46" height="14"/>',
+    // market lab: instrument rack
+    '<rect class="furn" x="808" y="336" width="16" height="44"/><rect class="furn" x="830" y="336" width="16" height="44"/>',
+    // bridge: helm + viewport
+    '<path class="brassline" d="M1040 236 L1080 260 L1040 284"/><rect class="furn" x="1000" y="248" width="24" height="24"/>'
+  ].join('');
+  let rooms = '';
+  for (const R of ROOMS) {
+    const dept = deptById(R.id);
+    const tasks = R.id === 'etsy' ? FX.tasks : [];
+    const alert = R.id === 'etsy' ? '▲ 2' : R.id === 'bridge' ? '▲ 2 escalations' : '';
+    const [x, y, w, h] = R.r || [];
+    const lx = R.r ? x + 12 : R.lx, ly = R.r ? y + 26 : R.ly;
+    rooms += `<g class="room${R.id === 'expansion' ? ' expansion' : ''}" data-room="${R.id}" tabindex="0" role="button" aria-label="${esc(dept.name)}: ${esc(dept.fn)}. ${esc(dept.note)}">
+      ${R.r ? `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="3"/>` : `<path d="${R.d}"/>`}
+      <text class="room-name" x="${lx}" y="${ly}">${esc(dept.name.toUpperCase())}</text>
+      <text class="room-sub" x="${lx}" y="${ly + 15}">${esc(R.tag)}</text>
+      ${alert ? (R.r ? `<text class="room-alert" x="${x + w - 8}" y="${y + 20}" text-anchor="end" fill="var(--amber)">${alert}</text>`
+                     : `<text class="room-alert" x="${lx}" y="${ly + 32}" fill="var(--amber)">${alert}</text>`) : ''}
+    </g>`;
+  }
+  // Etsy conveyor: tokens are real (fixture) tasks at known stages, not ambient decoration.
+  const beltY = 222, bx0 = 466, bx1 = 604, step = (bx1 - bx0) / 5;
+  let belt = `<line class="belt" x1="${bx0}" y1="${beltY}" x2="${bx1}" y2="${beltY}"/><line class="belt-tick" x1="${bx0}" y1="${beltY}" x2="${bx1}" y2="${beltY}"/>`;
+  FX.tasks.filter(t => t.status !== 'done').forEach((t, i) => {
+    const cx = bx0 + t.stage * step, col = STROKE[t.status] || 'var(--steel)';
+    belt += `<g class="token" data-task="${t.id}" tabindex="0" role="button" aria-label="Task ${t.id} ${esc(t.title)}, ${STAGE_STATUS[t.status][1]}">
+      <rect x="${cx - 6}" y="${beltY - 6 - (i % 2) * 3}" width="12" height="12" fill="#d8cfb8" stroke="${col}" stroke-width="2.5"/></g>`;
+  });
+  let crew = '';
+  for (const c of FX.crew) {
+    const [cx, cy] = c.at, col = STROKE[c.status] || 'var(--steel)';
+    const initials = c.name.split('-').pop().slice(0, 3);
+    crew += `<g class="crew" data-agent="${c.id}" tabindex="0" role="button" aria-label="${c.name}, ${STAGE_STATUS[c.status][1]}. Open dossier.">
+      ${c.status === 'running' ? `<circle class="working-ring" cx="${cx}" cy="${cy}" r="17" fill="none" stroke="${col}" stroke-width="1.5"/>` : ''}
+      <circle class="body" cx="${cx}" cy="${cy}" r="${c.kind === 'overseer' ? 16 : 12}" stroke="${col}" ${c.status === 'offline' ? 'stroke-dasharray="3 3"' : ''}/>
+      <text x="${cx}" y="${cy + 3}" text-anchor="middle">${initials}</text></g>`;
+  }
+  return `
+    <defs><pattern id="rivets" width="22" height="22" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1.2" fill="#3b434d"/></pattern></defs>
+    <g id="world">
+      <rect class="engine" x="34" y="168" width="66" height="44" rx="4"/><rect class="engine" x="34" y="238" width="66" height="44" rx="4"/><rect class="engine" x="34" y="308" width="66" height="44" rx="4"/>
+      <ellipse class="flame" cx="26" cy="190" rx="14" ry="12"/><ellipse class="flame" cx="26" cy="260" rx="14" ry="12"/><ellipse class="flame" cx="26" cy="330" rx="14" ry="12"/>
+      <path class="hull-plate" d="M86 150 L300 92 L820 92 L1010 156 L1168 260 L1010 364 L820 428 L300 428 L86 370 Z"/>
+      <path d="M86 150 L300 92 L820 92 L1010 156 L1168 260 L1010 364 L820 428 L300 428 L86 370 Z" fill="url(#rivets)" pointer-events="none"/>
+      <path class="hull-seam" d="M300 100 V420 M820 100 V420 M1010 164 V356"/>
+      <path d="M760 92 l30 -26 h70 l20 26" class="hull-plate"/>
+      <path d="M760 428 l30 26 h70 l20 -26" class="hull-plate"/>
+      <rect class="spine" x="290" y="246" width="618" height="28"/>
+      <path class="brassline" d="M300 260 H900" stroke-dasharray="10 8"/>
+      <text x="600" y="264" text-anchor="middle" class="room-sub" style="fill:#5f6a75">MAIN PASSAGE</text>
+      ${rooms}${furn}${belt}${crew}
+      <text x="1110" y="420" class="room-sub" style="fill:#5f6a75">BOW →</text>
+      <text x="70" y="420" class="room-sub" style="fill:#5f6a75">← STERN</text>
+    </g>`;
+}
+
+/* camera: bounded zoom, drag-pan, fit, focus-on-department. Camera state survives opening/closing panels. */
+const HOME = { x: 0, y: 40, w: 1200, h: 440 };
+let cam = { ...HOME };
+const svg = $('#ship');
+function applyCam() { svg.setAttribute('viewBox', `${cam.x} ${cam.y} ${cam.w} ${cam.h}`); }
+function zoom(f, cx, cy) {
+  const nw = Math.min(1400, Math.max(300, cam.w * f)), k = nw / cam.w;
+  cx = cx ?? cam.x + cam.w / 2; cy = cy ?? cam.y + cam.h / 2;
+  cam = { x: cx - (cx - cam.x) * k, y: cy - (cy - cam.y) * k, w: nw, h: cam.h * k }; applyCam();
+}
+function focusRoom(id) {
+  const R = ROOMS.find(r => r.id === id); if (!R) return;
+  const [x, y, w, h] = R.r || [R.lx - 20, R.ly - 30, 200, 200];
+  const W = Math.max(w * 2.6, 420), H = W * HOME.h / HOME.w;
+  cam = { x: x + w / 2 - W / 2, y: y + h / 2 - H / 2, w: W, h: H }; applyCam();
+}
+function initShip() {
+  svg.innerHTML = shipSVG(); applyCam();
+  let drag = null;
+  svg.addEventListener('pointerdown', e => {
+    if (e.target.closest('.room,.crew,.token')) return;
+    drag = { x: e.clientX, y: e.clientY, cam: { ...cam } }; svg.classList.add('dragging'); svg.setPointerCapture(e.pointerId);
+  });
+  svg.addEventListener('pointermove', e => {
+    if (!drag) return; const k = cam.w / svg.clientWidth;
+    cam = { ...drag.cam, x: drag.cam.x - (e.clientX - drag.x) * k, y: drag.cam.y - (e.clientY - drag.y) * k }; applyCam();
+  });
+  const end = () => { drag = null; svg.classList.remove('dragging'); };
+  svg.addEventListener('pointerup', end); svg.addEventListener('pointercancel', end);
+  svg.addEventListener('wheel', e => { e.preventDefault(); zoom(e.deltaY > 0 ? 1.12 : 0.89); }, { passive: false });
+  const activate = el => {
+    const room = el.closest('.room'), crew = el.closest('.crew'), tok = el.closest('.token');
+    if (crew) openDossier(crew.dataset.agent);
+    else if (tok) openTask(tok.dataset.task);
+    else if (room) { focusRoom(room.dataset.room); markRoom(room.dataset.room); openDept(room.dataset.room); }
+  };
+  svg.addEventListener('click', e => activate(e.target));
+  svg.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); activate(e.target); } });
+  $('#zoomIn').onclick = () => zoom(0.8); $('#zoomOut').onclick = () => zoom(1.25);
+  $('#fitShip').onclick = () => { cam = { ...HOME }; applyCam(); };
+}
+function markRoom(id) { svg.querySelectorAll('.room').forEach(g => g.classList.toggle('selected', g.dataset.room === id)); }
+
+/* ====================================================================================================
+   RAIL — ship status (also the narrow-screen primary navigation)
+   ==================================================================================================== */
+function healthChip(h) {
+  return { ok: '<span class="chip s-running">Nominal</span>', attention: '<span class="chip s-review">Attention</span>',
+    inactive: '<span class="chip s-notconn">Inactive</span>', empty: '<span class="chip s-offline">Empty</span>' }[h];
+}
+function renderRail() {
+  $('#rail').innerHTML = `
+    <section>
+      <span class="label">Watch report · ${FX.asOf} · fixture</span>
+      <h2>Ship status</h2>
+      <div class="rows">
+        <button class="row" type="button" data-open="approvals"><span class="t">1 approval waiting for you</span>${chip('approval')}<span class="m">Habit Tracker Bundle · listing package v3</span></button>
+        <button class="row" type="button" data-open="gritty"><span class="t">2 escalations on the bridge</span>${chip('blocked')}<span class="m">Etsy visuals blocked · QA cap reached</span></button>
+      </div>
+    </section>
+    <section>
+      <span class="label">Departments</span>
+      <ul class="dept-list">${FX.departments.filter(d => d.id !== 'expansion').map(d => `
+        <li><button type="button" data-dept="${d.id}"><span class="nm">${esc(d.name)}</span>${healthChip(d.health)}<span class="meta">${esc(d.fn)} · ${esc(d.note)}</span></button></li>`).join('')}
+      </ul>
+    </section>`;
+  $('#rail').onclick = e => {
+    const d = e.target.closest('[data-dept]'), o = e.target.closest('[data-open]');
+    if (d) { focusRoom(d.dataset.dept); markRoom(d.dataset.dept); openDept(d.dataset.dept); }
+    if (o) route(o.dataset.open);
+  };
+}
+
+/* ====================================================================================================
+   OVERLAY STACK — each entry is {kind, id, tab, scroll}. Back/Escape pops one level and restores the
+   previous tab + scroll; the ship camera is never reset by opening or closing a panel.
+   ==================================================================================================== */
+const stack = [];
+const overlay = $('#overlay');
+function push(entry) {
+  const top = stack[stack.length - 1];
+  if (top) top.scroll = ($('.sheet-body', overlay) || $('.workcol .sheet-body', overlay) || {}).scrollTop || 0;
+  stack.push(entry); renderTop();
+}
+function pop() { stack.pop(); if (!stack.length) { overlay.hidden = true; overlay.innerHTML = ''; markRoom(null); return; } renderTop(); }
+function crumbs() {
+  return stack.map((s, i) => i === stack.length - 1 ? `<span>${esc(s.label)}</span>` : `<button type="button" data-crumb="${i}">${esc(s.label)}</button><span>›</span>`).join('');
+}
+function renderTop() {
+  const e = stack[stack.length - 1]; overlay.hidden = false;
+  overlay.innerHTML = e.kind === 'dossier' ? dossierHTML(e) : e.kind === 'dept' ? deptHTML(e) : listHTML(e);
+  const body = $('.sheet-body', overlay); if (body && e.scroll) body.scrollTop = e.scroll;
+  const first = $('.close', overlay); if (first) first.focus({ preventScroll: true });
+}
+overlay.addEventListener('click', e => {
+  if (e.target === overlay) { while (stack.length) stack.pop(); pop(); return; }
+  const t = e.target.closest('button'); if (!t) return;
+  const top = stack[stack.length - 1];
+  if (t.classList.contains('close')) return pop();
+  if (t.dataset.crumb) { stack.length = +t.dataset.crumb + 1; return renderTop(); }
+  if (t.dataset.tab) { top.tab = t.dataset.tab; top.scroll = 0; return renderTop(); }
+  if (t.dataset.unit) { top.unit = top.unit === t.dataset.unit ? null : t.dataset.unit; return renderTop(); }
+  if (t.dataset.agent) return openDossier(t.dataset.agent);
+  if (t.dataset.task) return openTask(t.dataset.task);
+  if (t.dataset.dept) return openDept(t.dataset.dept);
+  if (t.dataset.demo) return toast(t.dataset.demo);
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && stack.length) { e.preventDefault(); pop(); } });
+function toast(msg) {
+  const el = document.createElement('div'); el.className = 'toast'; el.setAttribute('role', 'status'); el.textContent = msg;
+  $('main').appendChild(el); setTimeout(() => el.remove(), 4200);
+}
+const PREVIEW_ONLY = 'Preview only: this control is wired to nothing yet. In the build it calls the existing runtime authority.';
+
+/* ---------- department workspace ---------- */
+function openDept(id) { const d = deptById(id); push({ kind: 'dept', id, tab: 'overview', unit: null, label: d.name }); }
+function openTask(id) {
+  const t = FX.tasks.find(x => x.id === id);
+  push({ kind: 'list', id: 'task', task: t, label: t.id });
+}
+function deptHTML(e) {
+  const d = deptById(e.id);
+  const head = `<div class="sheet-head">
+      <div class="sheet-title"><div class="crumbs">${crumbs()}</div><h2>${esc(d.name.toUpperCase())}</h2>
+        <span class="label">${esc(d.fn)} · ${e.unit ? esc(FX.units.etsy.find(u => u.id === e.unit).name) : 'All units'} · this week · data as of ${FX.asOf} (fixture)</span></div>
+      <div class="sheet-tools">${d.id === 'etsy' ? '<button class="btn primary" type="button" data-demo="' + PREVIEW_ONLY + '">New product brief</button>' : ''}
+        <button class="close" type="button" aria-label="Close ${esc(d.name)}">×</button></div></div>`;
+  if (d.id === 'bridge') return `<div class="sheet">${head}${grittyBody()}</div>`;
+  if (d.id !== 'etsy') return `<div class="sheet">${head}<div class="sheet-body">${inactiveDept(d)}</div></div>`;
+  const tabs = ['overview', 'production', 'outputs', 'crew', 'performance', 'settings'];
+  const tabBar = `<div class="tabs" role="tablist">${tabs.map(t => `<button type="button" role="tab" data-tab="${t}" aria-selected="${e.tab === t}">${t}</button>`).join('')}</div>`;
+  const body = { overview: etsyOverview, production: etsyProduction, outputs: etsyOutputs, crew: etsyCrew, performance: etsyPerformance, settings: etsySettings }[e.tab](e);
+  return `<div class="sheet">${head}${tabBar}<div class="sheet-body">${body}</div></div>`;
+}
+function unitsHTML(e) {
+  return `<div class="units">${FX.units.etsy.map(u => `
+    <button class="unit" type="button" data-unit="${u.id}" aria-pressed="${e.unit === u.id}">
+      <span class="nm">${esc(u.name)}</span><span>${u.state === 'active' ? '<span class="chip s-running">Active</span>' : '<span class="chip s-review">Experiment</span>'}</span>
+      <span class="meta">${esc(u.platform)} · ${esc(u.note)}</span></button>`).join('')}
+    <div class="unit" style="cursor:default"><span class="nm">Listings &amp; sales</span><span><span class="chip s-notconn">Not connected</span></span><span class="meta">No Etsy API connection. Sales are unknown, not zero.</span></div>
+  </div>`;
+}
+const scoped = e => FX.tasks.filter(t => !e.unit || t.unit === e.unit);
+function summaryHTML(e) {
+  const ts = scoped(e);
+  const cell = (label, v, src) => `<div><span class="label">${label}</span><span class="v">${v}</span><span class="src">${src}</span></div>`;
+  return `<div class="summary">
+    ${cell('In flight now', ts.filter(t => !['done'].includes(t.status)).length, 'current count · task records')}
+    ${cell('Blocked now', ts.filter(t => t.status === 'blocked').length, 'current count · task records')}
+    ${cell('Needs you', ts.filter(t => t.status === 'approval').length, 'current count · approval queue')}
+    ${cell('Accepted this week', e.unit === 'u-nebula' ? 0 : 1, 'period total · QA receipts')}
+    ${cell('Model spend', e.unit === 'u-nebula' ? '$0.61' : '$2.97', 'this week · usage ledger · platform fees unknown')}
+  </div>`;
+}
+function conveyorHTML(e) {
+  const ts = scoped(e);
+  return `<div class="conveyor"><div class="stages">${FX.stagesEtsy.map((s, i) => {
+    const here = ts.filter(t => t.stage === i);
+    return `<div class="stage-col"><header><span>${s}</span><b>${here.length}</b></header>${here.map(t => `
+      <button class="task t-${t.status}" type="button" data-task="${t.id}">
+        <span class="t">${esc(t.title)}</span>${chip(t.status)}
+        <span class="m">${t.id} · ${esc(ownerName(t.owner))} · ${t.age}</span>
+        ${t.blocker ? `<span class="m" style="color:var(--rust)">${esc(t.blocker)}</span>` : `<span class="m">next → ${esc(t.next)}</span>`}
+      </button>`).join('') || '<span class="m" style="font-size:12px;color:var(--steel)">Empty</span>'}</div>`;
+  }).join('')}</div></div>`;
+}
+function etsyOverview(e) {
+  return `${unitsHTML(e)}${summaryHTML(e)}
+  <div class="panel"><div class="panel-head"><h3>Production conveyor</h3><span class="label">1 item per stage · max 2 parallel</span></div>${conveyorHTML(e)}</div>
+  <div class="grid2">
+    <div class="panel"><div class="panel-head"><h3>Outputs</h3><button class="btn" type="button" data-tab="outputs">All outputs</button></div>${outputsGrid(e, 3)}</div>
+    <div class="panel"><div class="panel-head"><h3>Decisions for you</h3><span class="label">bound to exact versions</span></div>
+      <div class="rows">${FX.approvals.filter(a => !e.unit || FX.tasks.find(t => t.id === a.task).unit === e.unit).map(a => `
+        <div class="row"><span class="t">${esc(a.what)}</span>${chip('approval')}<span class="m">${esc(a.scope)} · ${esc(a.binds)}</span>
+          <span class="acts"><button class="btn primary" type="button" data-demo="${PREVIEW_ONLY}">Approve v3</button><button class="btn" type="button" data-demo="${PREVIEW_ONLY}">Request changes</button><button class="btn" type="button" data-task="${a.task}">Open task</button></span></div>`).join('') || '<div class="row"><span class="m">Nothing waiting on you for this unit.</span></div>'}
+        <div class="row"><span class="t">Wedding Day Checklist is blocked</span>${chip('blocked')}<span class="m">No image tool connected. Owner: ETSY-VISUAL. Choose a tool grant or a manual mockup step.</span>
+          <span class="acts"><button class="btn" type="button" data-task="T-1031">See blocker</button></span></div>
+      </div>
+      <div class="panel-head" style="margin-top:8px"><h3>Crew on duty</h3><button class="btn" type="button" data-tab="crew">Crew</button></div>
+      ${crewGrid('etsy', 3)}
+    </div>
+  </div>`;
+}
+function etsyProduction(e) {
+  return `${unitsHTML(e)}<div class="panel"><div class="panel-head"><h3>Production conveyor</h3><span class="label">select a task for stage history</span></div>${conveyorHTML(e)}</div>
+  <div class="tablewrap"><table class="mtable"><thead><tr><th>Task</th><th>Stage</th><th>State</th><th>Owner</th><th>Age</th><th>Version</th><th>Next handoff or blocker</th></tr></thead><tbody>
+  ${scoped(e).map(t => `<tr><td><button class="btn" type="button" data-task="${t.id}">${t.id}</button> ${esc(t.title)}</td><td>${FX.stagesEtsy[t.stage]}</td><td>${chip(t.status)}</td><td>${esc(ownerName(t.owner))}</td><td class="num">${t.age}</td><td class="num">${esc(t.ver)}</td><td>${esc(t.blocker || t.next)}</td></tr>`).join('')}
+  </tbody></table></div>`;
+}
+function thumb(kind) {
+  const lines = n => Array.from({ length: n }, (_, i) => `<span class="ln" style="left:22%;right:22%;top:${30 + i * 9}%"></span>`).join('');
+  if (kind === 'grid') return `<div class="thumb"><span class="pg" style="left:18%;right:18%;top:10%;bottom:6%;background-image:linear-gradient(#cfc6ae 1px,transparent 1px),linear-gradient(90deg,#cfc6ae 1px,transparent 1px);background-size:14px 14px"></span></div>`;
+  if (kind === 'ledger') return `<div class="thumb"><span class="pg" style="left:20%;right:20%;top:8%;bottom:6%"></span>${lines(6)}<span class="ln" style="left:24%;width:20%;top:18%;height:6px;background:#a2403a"></span></div>`;
+  return `<div class="thumb"><span class="pg" style="left:10%;width:38%;top:12%;bottom:10%"></span><span class="pg" style="right:10%;width:38%;top:16%;bottom:6%"></span><span class="ln" style="left:16%;width:26%;top:24%;background:#4f7f78"></span><span class="ln" style="right:16%;width:26%;top:28%;background:#c49a52"></span></div>`;
+}
+function outputsGrid(e, n) {
+  const outs = FX.outputs.filter(o => !e.unit || FX.tasks.find(t => t.id === o.task).unit === e.unit).slice(0, n || 99);
+  if (!outs.length) return '<p class="note">No outputs for this unit yet. Outputs appear here once a task produces a file.</p>';
+  return `<div class="outputs">${outs.map(o => `<button class="out" type="button" data-task="${o.task}">${thumb(o.kind)}
+    <span class="cap"><b>${esc(o.title)}</b><span>${o.id} · ${o.ver} · ${esc(o.qa)}</span><span>${esc(o.state)}</span></span></button>`).join('')}</div>`;
+}
+function etsyOutputs(e) { return `${unitsHTML(e)}<div class="panel"><div class="panel-head"><h3>Outputs</h3><span class="label">thumbnails are drawn stand-ins for fixture files</span></div>${outputsGrid(e)}</div>`; }
+function crewGrid(dept, n) {
+  return `<div class="crewgrid">${FX.crew.filter(c => c.dept === dept).slice(0, n || 99).map(c => `
+    <button class="crewcard" type="button" data-agent="${c.id}">${avatar(c, 40)}<span><span class="nm">${c.name}</span><br>${chip(c.status)}</span><span class="meta">${esc(c.role)}</span></button>`).join('')}</div>`;
+}
+function etsyCrew() { return `<p class="note">One shared role pool serves every Etsy store. Each job carries its own store context, so roles are not cloned per store.</p>${crewGrid('etsy')}`; }
+function etsyPerformance(e) {
+  return `${unitsHTML(e)}<div class="tablewrap"><table class="mtable"><thead><tr><th>Metric</th><th>Value</th><th>Period</th><th>Source</th><th>Freshness</th></tr></thead><tbody>
+    <tr><td>Accepted outputs</td><td class="num">1</td><td>This week</td><td>QA receipts</td><td>Fixture</td></tr>
+    <tr><td>First-pass QA rate</td><td class="num">2 of 4 (50%)</td><td>Last 30 days</td><td>QA receipts</td><td>Fixture</td></tr>
+    <tr><td>Median brief → release</td><td class="num">2d 6h</td><td>Last 30 days (n=3)</td><td>Task events</td><td>Fixture</td></tr>
+    <tr><td>Model and tool spend</td><td class="num">$2.97</td><td>This week</td><td>Usage ledger</td><td>Fixture</td></tr>
+    <tr><td>Etsy sales</td><td>${'<span class="chip s-notconn">Not connected</span>'}</td><td>—</td><td>No Etsy connection</td><td>Unknown, not zero</td></tr>
+    <tr><td>Platform fees</td><td>${'<span class="chip s-notconn">Not connected</span>'}</td><td>—</td><td>—</td><td>Profit cannot be computed yet</td></tr>
+  </tbody></table></div>
+  <div class="panel"><div class="panel-head"><h3>Improvement experiments</h3></div><div class="rows"><div class="row"><span class="t">Shorter listing titles (ETSY-COPY)</span>${chip('queued')}<span class="m">Proposed by ETSY-PERF once a sales source is connected. Not started.</span></div></div></div>`;
+}
+function etsySettings() {
+  return `<div class="formgrid">
+    <div class="field"><label for="setPar">Parallel stages in this department</label><select id="setPar"><option>1</option><option selected>2</option></select></div>
+    <div class="field"><label for="setQa">QA correction cycles before escalation</label><select id="setQa"><option>1</option><option selected>2</option><option>3</option></select></div>
+    <div class="field"><label for="setBud">Weekly model budget (USD)</label><input id="setBud" value="10.00" inputmode="decimal"></div>
+    <div class="field"><label for="setTz">Schedule timezone</label><input id="setTz" value="America/New_York"></div>
+  </div><p class="note">Settings save through the existing runtime authority and apply to the next run. Running jobs keep the configuration version they started with.</p>
+  <div><button class="btn primary" type="button" data-demo="${PREVIEW_ONLY}">Save for next run</button></div>`;
+}
+function inactiveDept(d) {
+  const detail = {
+    youtube: 'Planned roles: VIDEO-LEAD, RESEARCH, WRITER, PRODUCER, PACKAGE, QA, PERF. Text models cannot render or upload video on their own. Rendering and upload tools must be connected first.',
+    fiverr: 'Planned roles: SERVICE-LEAD, INTAKE, PRODUCER, QA, DELIVERY, PERF. Several service lines can share one seller account. Check Fiverr rules before creating any account.',
+    lab: 'Market Lab keeps its current boundary: offline historical research only, no live trading. Planned roles: LAB-LEAD, DATA, QUANT, RISK.',
+    research: 'SCOUT collects dated, sourced evidence cards. STRATEGIST turns the strongest into bounded experiment proposals with a spend ceiling and stop criteria.',
+    cargo: 'Accepted outputs from every department, with version, QA receipt and provenance. Opens the same output detail as the department workspaces.',
+    comms: 'Telegram connection state, notification routing and the TELE digest. The preview cannot see your real Telegram setup.',
+    engineering: 'Runtime health, provider readiness, model usage, quotas and costs, read from the existing spend ledger and diagnostics.',
+    expansion: 'Unassigned compartment. Assigning a unit here is a layout change and never grants tools by itself.'
+  }[d.id] || '';
+  return `<div class="units"><div class="unit" style="cursor:default"><span class="nm">${esc(d.fn)}</span><span>${healthChip(d.health)}</span><span class="meta">${esc(d.note)}</span></div></div>
+    <p class="note">${esc(detail)}</p>
+    <p class="note">The full workspace in this preview is built for the Etsy Bay first. After you review it, the same layout applies here: header, unit switcher, summary, conveyor, outputs, crew, decisions, performance.</p>
+    <div><button class="btn" type="button" data-dept="etsy">Open the Etsy Bay workspace</button></div>`;
+}
+
+/* ---------- task detail (opened from conveyor, outputs, ship tokens) ---------- */
+function listHTML(e) {
+  const head = (title, sub) => `<div class="sheet-head"><div class="sheet-title"><div class="crumbs">${crumbs()}</div><h2>${title}</h2><span class="label">${sub}</span></div>
+    <div class="sheet-tools"><button class="close" type="button" aria-label="Close">×</button></div></div>`;
+  if (e.id === 'task') {
+    const t = e.task, unit = FX.units.etsy.find(u => u.id === t.unit), out = FX.outputs.find(o => o.task === t.id);
+    return `<div class="sheet">${head(esc(t.title.toUpperCase()), `${t.id} · ${esc(unit.name)} · Etsy Bay`)}<div class="sheet-body">
+      <div class="stagebar">${FX.stagesEtsy.map((s, i) => `<span class="${i < t.stage ? 'done' : i === t.stage ? 'now' : ''}">${s}</span>`).join('')}</div>
+      <div class="incident"><div><span class="label">State</span><br>${chip(t.status)}</div><div><span class="label">Accountable</span><br><button class="btn" type="button" data-agent="${t.owner === 'dan' ? 'etsy-qa' : t.owner}">${esc(ownerName(t.owner))}</button></div>
+        <div><span class="label">Age</span><br><span class="mono">${t.age}</span></div><div><span class="label">Version</span><br><span class="mono">${esc(t.ver)}</span></div></div>
+      ${t.blocker ? `<div class="rows"><div class="row"><span class="t">Why it is stopped</span>${chip(t.status)}<span class="m">${esc(t.blocker)}</span><span class="acts"><button class="btn" type="button" data-demo="${PREVIEW_ONLY}">${t.status === 'approval' ? 'Review package' : 'Resolve'}</button></span></div></div>` : ''}
+      ${t.qaCycle ? `<p class="note">QA: ${esc(t.qaCycle)}. A third failure escalates to GRITTY instead of looping.</p>` : ''}
+      <div class="grid2"><div class="panel"><div class="panel-head"><h3>Stage history</h3></div><ol class="events">
+        <li><time>Tue 08:02</time>Brief accepted by ETSY-LEAD for ${esc(unit.name)}.</li>
+        ${t.stage >= 1 ? '<li><time>Tue 08:05</time>ETSY-BUILDER started Build with brief v1.</li>' : ''}
+        ${t.stage >= 2 ? '<li><time>Tue 11:40</time>Build output accepted. Handoff to Visuals & copy.</li>' : ''}
+        ${t.stage >= 3 ? '<li><time>Wed 09:12</time>ETSY-QA returned defects to ETSY-BUILDER (cycle 1).</li>' : ''}
+        ${t.stage >= 4 ? '<li><time>Wed 14:30</time>QA passed v3. Approval request AP-77 opened for v3.</li>' : ''}
+      </ol></div>
+      <div class="panel"><div class="panel-head"><h3>Output</h3></div>${out ? `<button class="out" type="button" data-demo="${PREVIEW_ONLY}">${thumb(out.kind)}<span class="cap"><b>${esc(out.title)}</b><span>${out.id} · ${out.ver} · ${esc(out.qa)}</span><span>Provenance: ${t.id}, produced by ${esc(ownerName(t.owner))}</span></span></button>` : '<p class="note">No output file yet.</p>'}</div></div>
+    </div></div>`;
+  }
+  if (e.id === 'approvals') {
+    return `<div class="sheet">${head('APPROVALS', 'Decisions waiting for you · each binds to one exact version')}<div class="sheet-body"><div class="rows">${FX.approvals.map(a => `
+      <div class="row"><span class="t">${esc(a.what)}</span>${chip('approval')}<span class="m">${esc(a.scope)} · ${esc(a.binds)} ${esc(a.by)}</span>
+      <span class="acts"><button class="btn primary" type="button" data-demo="${PREVIEW_ONLY}">Approve v3</button><button class="btn" type="button" data-demo="${PREVIEW_ONLY}">Request changes</button><button class="btn" type="button" data-task="${a.task}">Open task</button></span></div>`).join('')}
+      ${FX.decisions.map(d => `<div class="row"><span class="t">${esc(d.what)}</span>${chip('review')}<span class="m">${esc(d.evidence)} ${esc(d.due)}</span></div>`).join('')}</div></div></div>`;
+  }
+  if (e.id === 'crew') {
+    const depts = [...new Set(FX.crew.map(c => c.dept))];
+    return `<div class="sheet">${head('CREW', `${FX.crew.length} profiles shown · the starting 10 · more are activated only when a gap is measured`)}<div class="sheet-body">${depts.map(d => `
+      <div class="panel"><div class="panel-head"><h3>${esc(deptById(d).name)}</h3><span class="label">${esc(deptById(d).fn)}</span></div>${crewGrid(d)}</div>`).join('')}</div></div>`;
+  }
+  if (e.id === 'departments') {
+    return `<div class="sheet">${head('DEPARTMENTS', 'Every compartment, without needing the ship view')}<div class="sheet-body"><div class="health">${FX.departments.filter(d => d.id !== 'expansion').map(d => `
+      <button type="button" data-dept="${d.id}"><b>${esc(d.name)}</b>${healthChip(d.health)}<span class="label">${esc(d.fn)}</span><span style="font-size:12.5px;color:var(--steel)">${esc(d.note)}</span></button>`).join('')}</div></div></div>`;
+  }
+  return '';
+}
+
+/* ---------- dossiers ---------- */
+function avatar(c, size) {
+  const col = STROKE[c.status] || 'var(--steel)', ov = c.kind === 'overseer';
+  return `<svg class="avatar" viewBox="0 0 64 64" width="${size}" height="${size}" aria-hidden="true">
+    <rect width="64" height="64" fill="#14171b"/>
+    <path d="M12 64 Q12 44 32 42 Q52 44 52 64 Z" fill="${ov ? '#3a2f1c' : '#2c323a'}"/>
+    <rect x="18" y="14" width="28" height="26" rx="${ov ? 4 : 10}" fill="#3b434d" stroke="${col}" stroke-width="2"/>
+    <rect x="22" y="22" width="20" height="7" fill="#0d0f12"/><rect x="24" y="24" width="5" height="3" fill="${col}"/><rect x="35" y="24" width="5" height="3" fill="${col}"/>
+    ${ov ? '<path d="M14 16 L32 6 L50 16 Z" fill="#c49a52"/><rect x="38" y="20" width="8" height="10" fill="#0d0f12"/>' : '<rect x="30" y="8" width="4" height="7" fill="#7d6538"/>'}
+  </svg>`;
+}
+function openDossier(id) { const c = crewById(id); push({ kind: 'dossier', id, tab: c.kind === 'overseer' ? 'oversight' : 'overview', label: c.name }); }
+function statusSentence(c) {
+  const t = FX.tasks.find(x => x.owner === c.id && x.status !== 'done');
+  if (c.status === 'offline') return `<b>${c.name}</b> is not activated. It turns on when a sales source is connected and there are results to read.`;
+  if (c.kind === 'overseer') return `<b>GRITTY</b> is watching. It wakes for 2 open escalations and 1 decision. It is not doing routine production work.`;
+  if (!t) return `<b>${c.name}</b> is idle. No task is assigned.`;
+  const unit = FX.units.etsy.find(u => u.id === t.unit).name;
+  if (t.status === 'blocked') return `<b>${c.name}</b> is blocked on <b>${esc(t.title)}</b> for ${esc(unit)}. ${esc(t.blocker)}`;
+  return `<b>${c.name}</b> is working on <b>${esc(t.title)}</b> for ${esc(unit)}. Next handoff: ${esc(t.next.toLowerCase())}.`;
+}
+function dossierHTML(e) {
+  const c = crewById(e.id), d = deptById(c.dept), t = FX.tasks.find(x => x.owner === c.id && x.status !== 'done');
+  const tabs = c.kind === 'overseer' ? ['oversight', 'interventions', 'responsibilities', 'performance', 'configuration']
+    : ['overview', 'current work', 'responsibilities', 'activity', 'performance', 'configuration'];
+  const id = `<aside class="idcol">
+      <div class="portrait">${avatar(c, '100%')}</div>
+      <div><h2>${c.name}</h2><span class="label">${esc(d.name)} · ${c.kind === 'overseer' ? 'Overseer' : 'Single role'}</span></div>
+      <div class="wide">${chip(c.status)}</div>
+      <dl class="kv wide"><dt>Role</dt><dd>${esc(c.role)}</dd><dt>Units</dt><dd>${c.dept === 'etsy' ? 'All Etsy stores (shared pool)' : 'Portfolio-wide'}</dd>
+        <dt>Model</dt><dd>${esc(c.model)}</dd><dt>Agent ID</dt><dd class="mono">${c.id}</dd><dt>Config</dt><dd class="mono">v4 · effective next run</dd></dl>
+      <div class="wide" style="display:flex;gap:8px;flex-wrap:wrap">
+        ${t ? `<button class="btn" type="button" data-task="${t.id}">Open current task</button>` : ''}
+        <button class="btn" type="button" data-demo="${PREVIEW_ONLY}">Open transcript</button>
+        ${c.status === 'running' ? `<button class="btn" type="button" data-demo="${PREVIEW_ONLY}">Pause after this step</button>` : ''}
+      </div>
+    </aside>`;
+  const tabBar = `<div class="tabs" role="tablist">${tabs.map(x => `<button type="button" role="tab" data-tab="${x}" aria-selected="${e.tab === x}">${x}</button>`).join('')}</div>`;
+  const pane = (c.kind === 'overseer' ? { oversight: grittyOversight, interventions: grittyInterventions } : {})[e.tab] || {
+    overview: dOverview, 'current work': dCurrent, responsibilities: dResp, activity: dActivity, performance: dPerf, configuration: dConfig }[e.tab];
+  return `<div class="sheet dossier"><div class="sheet-head"><div class="sheet-title"><div class="crumbs">${crumbs()}</div><span class="label">Crew dossier</span></div>
+      <div class="sheet-tools"><button class="close" type="button" aria-label="Close dossier">×</button></div></div>
+    <div class="dossier-body">${id}<div class="workcol"><div class="statusline" role="status">${statusSentence(c)}</div>${tabBar}<div class="sheet-body">${pane(c, t)}</div></div></div></div>`;
+}
+function dOverview(c, t) {
+  return `<div class="panel"><div class="panel-head"><h3>Single responsibility</h3></div><p style="margin:0;font-size:17px">${esc(c.role)}.</p></div>
+    ${t ? `<div class="panel"><div class="panel-head"><h3>Where the work stands</h3><span class="label">structured stages, no invented %</span></div>
+      <div class="stagebar">${FX.stagesEtsy.map((s, i) => `<span class="${i < t.stage ? 'done' : i === t.stage ? 'now' : ''}">${s}</span>`).join('')}</div>
+      <div class="incident"><div><span class="label">Task</span><br><span class="mono">${t.id}</span></div><div><span class="label">Elapsed</span><br><span class="mono">${t.age}</span> <span style="color:var(--steel)">(not an ETA)</span></div>
+        <div><span class="label">Budget used</span><br><span class="mono">$0.42 / $1.50</span></div><div><span class="label">Requests</span><br><span class="mono">7 / 25</span></div></div></div>` : ''}
+    <div class="panel"><div class="panel-head"><h3>Last result</h3></div><div class="rows"><div class="row"><span class="t">Student Semester Planner v4 passed QA first time</span>${chip('done')}<span class="m">6 days ago · artifact A-290 · receipt R-71</span></div></div></div>`;
+}
+function dCurrent(c, t) {
+  if (!t) return '<p class="note">No current task. When one is assigned, its brief, inputs, expected output, limits and next handoff appear here.</p>';
+  return `<div class="tablewrap"><table class="mtable"><tbody>
+    <tr><th>Task / stage</th><td>${t.id} · ${FX.stagesEtsy[t.stage]}</td></tr>
+    <tr><th>Business unit</th><td>${esc(FX.units.etsy.find(u => u.id === t.unit).name)}</td></tr>
+    <tr><th>Brief</th><td>Printable 2026 holiday budget planner, US Letter + A4, 12 pages, gift and travel trackers.</td></tr>
+    <tr><th>Accepted inputs</th><td class="num">brief v1 (ETSY-LEAD) · style guide v2 (store)</td></tr>
+    <tr><th>Expected output</th><td>Print-ready PDF in both sizes, passing the printable-margin check</td></tr>
+    <tr><th>Started · elapsed</th><td class="num">08:58 · ${t.age}</td></tr>
+    <tr><th>Depends on</th><td>Nothing open</td></tr><tr><th>Next handoff</th><td>${esc(t.next)} (ETSY-VISUAL, ETSY-COPY)</td></tr>
+    <tr><th>Limits</th><td class="num">25 requests · 45 min · $1.50 · 1 retry</td></tr><tr><th>Blocker</th><td>None</td></tr>
+  </tbody></table></div>`;
+}
+function dResp(c) {
+  return `<div class="tablewrap"><table class="mtable"><tbody>
+    <tr><th>Purpose</th><td>${esc(c.role)}.</td></tr>
+    <tr><th>Done means</th><td>Output matches the accepted brief, both page sizes render, margins are inside the printable area.</td></tr>
+    <tr><th>Tools allowed</th><td>Read files, write files in the store workspace (asks first), notebook. Granted by the existing capability gate.</td></tr>
+    <tr><th>Hands off to</th><td>ETSY-VISUAL and ETSY-COPY with the artifact version id. QA is always another role.</td></tr>
+    <tr><th>Escalates when</th><td>Brief is ambiguous, budget is 80% used, or QA fails twice.</td></tr>
+    <tr><th>Never without you</th><td>Publishing, spending outside the budget, contacting customers.</td></tr>
+  </tbody></table></div>`;
+}
+function dActivity() {
+  return `<ol class="events">
+    <li><time>09:40</time>Wrote <span class="mono">holiday-budget-planner_letter.pdf</span> v1 draft (approved write).</li>
+    <li><time>09:31</time>Tool: <span class="mono">fs.write</span> asked for approval; you approved it once.</li>
+    <li><time>09:12</time>Decision record: used the store style guide v2 colours instead of the brief's suggestion, to match existing listings.</li>
+    <li><time>08:58</time>Accepted task T-1042 with brief v1 from ETSY-LEAD.</li>
+    <li><time>Tue</time>Revision: T-1039 returned by ETSY-QA (margins). Fixed in v2.</li>
+  </ol><p class="note">Only observable events and short decision records are shown. A full transcript opens from the identity column.</p>`;
+}
+function dPerf() {
+  return `<div class="tablewrap"><table class="mtable"><thead><tr><th>Measure</th><th>Value</th><th>Period</th></tr></thead><tbody>
+    <tr><td>Accepted tasks</td><td class="num">3</td><td>Last 30 days</td></tr>
+    <tr><td>First-pass QA</td><td class="num">2 of 4 (50%)</td><td>Last 30 days</td></tr>
+    <tr><td>Median turnaround</td><td class="num">3h 20m</td><td>Last 30 days (n=3)</td></tr>
+    <tr><td>Rework cycles</td><td class="num">2</td><td>Last 30 days</td></tr>
+    <tr><td>Model spend</td><td class="num">$1.88 actual</td><td>Last 30 days · usage ledger</td></tr>
+  </tbody></table></div>`;
+}
+function dConfig(c) {
+  return `<div class="formgrid">
+    <div class="field"><label for="cfgName">Display name</label><input id="cfgName" value="${c.name}"></div>
+    <div class="field"><label for="cfgModel">Model</label><select id="cfgModel"><option>Follow station default</option><option>Economical model (needs a benchmark first)</option></select></div>
+    <div class="field"><label for="cfgReq">Request limit per task</label><input id="cfgReq" value="25" inputmode="numeric"></div>
+    <div class="field"><label for="cfgCost">Cost limit per task (USD)</label><input id="cfgCost" value="1.50" inputmode="decimal"></div>
+    <div class="field"><label for="cfgFallback">If the model is unavailable</label><select id="cfgFallback"><option>Wait and retry once</option><option>Use paid fallback (only if an allowance exists)</option></select></div>
+    <div class="field"><label for="cfgUnits">Units</label><select id="cfgUnits"><option>All Etsy stores</option><option>Brassbound Planners only</option></select></div>
+  </div>
+  <div class="field"><label for="cfgInstr">Instructions</label><textarea id="cfgInstr" rows="4">Produce the sellable product described in the accepted brief. Use the store style guide. Do not write listing copy or visuals.</textarea></div>
+  <p class="note">Tool grants change only through the existing permission screen. Saving here applies to the next run; the running task keeps config v4.</p>
+  <div style="display:flex;gap:8px"><button class="btn primary" type="button" data-demo="${PREVIEW_ONLY}">Save for next run</button><button class="btn" type="button" data-demo="${PREVIEW_ONLY}">Edit tool grants</button></div>`;
+}
+function grittyOversight() {
+  return `<div class="panel"><div class="panel-head"><h3>Department health</h3></div><div class="health">${FX.departments.filter(d => !['bridge', 'expansion'].includes(d.id)).map(d => `
+      <button type="button" data-dept="${d.id}"><b>${esc(d.name)}</b>${healthChip(d.health)}<span style="font-size:12.5px;color:var(--steel)">${esc(d.note)}</span></button>`).join('')}</div></div>
+    <div class="panel"><div class="panel-head"><h3>Open escalations</h3><span class="label">deduplicated · woken by evidence</span></div>${incidentsHTML(FX.incidents.filter(i => i.state !== 'done'))}</div>
+    <div class="panel"><div class="panel-head"><h3>Decisions pending</h3></div><div class="rows">${FX.decisions.map(d => `<div class="row"><span class="t">${esc(d.what)}</span>${chip('review')}<span class="m">${esc(d.evidence)} ${esc(d.due)}</span></div>`).join('')}
+      <div class="row"><span class="t">Budget</span><span class="chip s-running">Within limits</span><span class="m">Portfolio $3.84 of $25.00 weekly (fixture). No conflicts.</span></div></div></div>`;
+}
+function incidentsHTML(list) {
+  return list.map(i => `<div class="panel" style="gap:6px"><div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap"><b>${i.id} · ${esc(i.title)}</b>${chip(i.state)}</div>
+    <div class="incident"><div><span class="label">Issue</span><br>${esc(i.title)}</div><div><span class="label">Evidence</span><br>${esc(i.evidence)}</div><div><span class="label">Decision</span><br>${esc(i.decision)}</div><div><span class="label">Outcome</span><br>${esc(i.outcome)}</div></div></div>`).join('');
+}
+function grittyInterventions() {
+  return `${incidentsHTML(FX.incidents)}<div class="tablewrap"><table class="mtable"><thead><tr><th>Measure</th><th>Value</th><th>Period</th></tr></thead><tbody>
+    <tr><td>Interventions resolved</td><td class="num">1 of 3</td><td>Last 7 days</td></tr><tr><td>Wakes suppressed as duplicates</td><td class="num">4</td><td>Last 7 days</td></tr>
+    <tr><td>Routine tasks done by GRITTY</td><td class="num">0</td><td>Last 7 days (target 0)</td></tr></tbody></table></div>`;
+}
+function grittyBody() {
+  return `<div class="sheet-body">
+    <div class="statusline" style="border:1px solid var(--rivet)">${statusSentence(crewById('gritty'))} <button class="btn" type="button" data-agent="gritty">Open GRITTY dossier</button></div>
+    ${grittyOversight()}</div>`;
+}
+
+/* ====================================================================================================
+   ROUTES
+   ==================================================================================================== */
+function route(r) {
+  document.querySelectorAll('.nav button').forEach(b => b.dataset.route === r ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current'));
+  stack.length = 0;
+  if (r === 'ship') { overlay.hidden = true; overlay.innerHTML = ''; markRoom(null); return; }
+  if (r === 'gritty') return openDossier('gritty');
+  push({ kind: 'list', id: r, label: r[0].toUpperCase() + r.slice(1) });
+}
+document.querySelector('.nav').addEventListener('click', e => { const b = e.target.closest('[data-route]'); if (b) route(b.dataset.route); });
+$('#apprCount').textContent = FX.approvals.length;
+initShip(); renderRail();
+const deep = location.hash.replace('#', '');
+if (deep === 'etsy') { focusRoom('etsy'); markRoom('etsy'); openDept('etsy'); }
+else if (deep === 'dossier') openDossier('etsy-builder');
+else if (deep === 'gritty') openDossier('gritty');
+</script>
+</body>
+</html>
