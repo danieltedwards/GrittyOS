@@ -6,6 +6,7 @@
    144×144 canvases or tight crops (like a sliced ChatGPT sheet): each one is cropped to its visible pixels at
    load, and the whole skin is scaled by its standing height so every avatar stands the same size aboard.
 
+   Frames can also be packed into one sheet per skin: <set>.png + <set>.json { frameName: [x, y, w, h] } ({ atlas: true }).
    Use: const skins = GrittyFleetSkins.create({ base: 'assets/sprites/' });
         skins.get('approved_voidwizard')  → null while loading, then { frame(track, dir, i, height) → canvas }
    In the PC app, `base` is StarNet's sprite folder and the set comes from the agent's own skin (DATA.SKINS). */
@@ -39,6 +40,14 @@ const GrittyFleetSkins = (() => {
     const base = (opts && opts.base) || 'assets/sprites/', sets = new Map();
     function load(set) {
       const entry = { ready: false, frames: {}, stand: 0, sized: new Map() }; sets.set(set, entry);
+      const finish = () => { entry.stand = (entry.frames.rot_south || Object.values(entry.frames).find(Boolean) || { height: 0 }).height; entry.ready = entry.stand > 0; if (opts && opts.onReady) opts.onReady(set); };
+      // packed form: one sheet <set>.png plus <set>.json { name: [x, y, w, h] }
+      if (opts && opts.atlas) {
+        Promise.all([fetch(base + set + '.json').then(r => r.json()), new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = base + set + '.png'; })])
+          .then(([map, im]) => { for (const [n, r] of Object.entries(map)) { const c = document.createElement('canvas'); c.width = r[2]; c.height = r[3]; c.getContext('2d').drawImage(im, r[0], r[1], r[2], r[3], 0, 0, r[2], r[3]); entry.frames[n] = c; } finish(); })
+          .catch(finish);
+        return entry;
+      }
       let left = NAMES.length;
       for (const n of NAMES) {
         const img = new Image();
@@ -46,7 +55,7 @@ const GrittyFleetSkins = (() => {
         img.onerror = () => done();
         img.src = base + set + '/' + n + '.png';
       }
-      function done() { if (--left) return; entry.stand = (entry.frames.rot_south || Object.values(entry.frames).find(Boolean) || { height: 0 }).height; entry.ready = entry.stand > 0; if (opts && opts.onReady) opts.onReady(set); }
+      function done() { if (--left) return; finish(); }
       return entry;
     }
     function get(set) {
