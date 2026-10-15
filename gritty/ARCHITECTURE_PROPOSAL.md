@@ -8,6 +8,29 @@ forked from upstream `androoAGI/starnet` at `54899e5f`, package `starnet-harness
 not Dan's customized PC project**. Anything below about "what Dan sees" is a hypothesis to check against the PC
 (handoff §6). The PC work has to be the baseline when the two are reconciled (§9).
 
+## Update, 2026-10-15 (after Dan's shared handoff, brainstorm, brief and station export)
+
+These later documents change the direction. Where this proposal disagrees with them, they win:
+
+- **Baseline.** Dan's PC runs StarNet v0.13.3 (`b35cf4ee`) and already has a GRITTY OS command deck
+  (`gritty-os.js`, `gritty-os-model.js`), department dashboards, agent workboards, output vault and dossier lanes.
+  This fork (v0.13.2) has none of that. Sections 3, 5 and 8 below were written without knowing it. The PC's
+  existing entry points (`GrittyOS.open/openAgent/openWork/openOutputs`, `StationUI.showAgent`) replace the
+  "new StationUI windows" plan.
+- **Direction.** A **fleet** on the **sea**: one pixel-art ship per department, clickable side-on cutaways, and every
+  click opens the matching existing GRITTY OS view or dossier. The single-ship compartments in
+  `prototype/gritty-preview.html` are superseded. That preview's invented roles (ETSY-BUILDER, ETSY-QA…) do not
+  match the real roster and are kept only as a reference for dashboard and dossier ideas.
+- **Split.** Claude builds the fleet/vessel presentation (`gritty/fleet/`); Codex keeps the operational workspace
+  and the runtime connection. See `fleet/INTEGRATION.md`.
+- **Standing orders to respect:**
+  - manual starts only
+  - no automatic retry or routine relay through GRITTY
+  - artwork paused, Market Lab dormant, Fiverr deferred
+  - budgets of $0.75 per run and $5 per day
+
+Sections 1, 2 and 7 (how the upstream code works, the remote still image, app identity and updater risks) still hold.
+
 ---
 
 ## 1. What the upstream code actually is (verified by reading it)

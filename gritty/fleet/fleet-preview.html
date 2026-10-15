@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>GRITTY Fleet Preview</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=VT323&display=swap">
+<link rel="stylesheet" href="fleet.css">
+<style>
+/* Layout: fleet stage on the left, a "what would open" log and the simulation controls on the right; stacks on phones.
+   Single deliberate dark look: a harbour at dusk. */
+:root {
+  color-scheme: dark;
+  --bg: #171513; --panel: #221e1a; --edge: #4d4034; --ink: #e9e1cf; --muted: #a9a492; --brass: #c9a35e; --sim: #3a2e1a;
+  --plate: "VT323", "Courier New", ui-monospace, monospace; --body: "Segoe UI", system-ui, sans-serif;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 var(--body); }
+.band { background: var(--sim); color: #e3b25e; font: 400 18px/1.2 var(--plate); letter-spacing: .04em;
+  padding-block: 6px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; align-items: start;
+  padding-block: 14px 28px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+aside { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+section { background: var(--panel); border: 1px solid var(--edge); padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+h3 { margin: 0; font: 400 24px/1 var(--plate); color: var(--brass); letter-spacing: .05em; text-transform: uppercase; }
+.note { margin: 0; color: var(--muted); font-size: 13px; }
+.log { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; max-height: 300px; overflow-y: auto; }
+.log li { border-left: 3px solid var(--brass); padding: 4px 8px; background: #1b1815; font-size: 13px; }
+.log li.miss { border-left-color: #c9614f; }
+.log code { font: 400 16px/1.1 var(--plate); color: var(--ink); overflow-wrap: anywhere; }
+.log span { display: block; color: var(--muted); }
+.ctl { display: grid; grid-template-columns: 1fr; gap: 6px; }
+.ctl button { text-align: left; font: 400 18px/1.1 var(--plate); color: var(--ink); background: #1b1815; border: 1px solid var(--edge); padding: 6px 8px; cursor: pointer; }
+.ctl button:hover { border-color: var(--brass); color: var(--brass); }
+.ctl label { display: flex; gap: 6px; align-items: center; font: 400 18px/1 var(--plate); color: var(--muted); }
+:focus-visible { outline: 2px solid #f0cf8a; outline-offset: 2px; }
+@media (max-width: 900px) { .wrap { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="band" role="note">SIMULATED · crew names and IDs follow your station export; every status, alert and event is fake. Clicks call a stand-in for GRITTY OS, not your app.</div>
+<div class="wrap">
+  <main id="fleet"></main>
+  <aside>
+    <section aria-labelledby="h-calls">
+      <h3 id="h-calls">What would open</h3>
+      <p class="note">Each click in the fleet calls one existing GRITTY OS entry point. In your PC app that call opens the real dashboard, workflow map, output vault or dossier.</p>
+      <ol class="log" id="log"><li><span>Nothing clicked yet.</span></li></ol>
+    </section>
+    <section aria-labelledby="h-sim">
+      <h3 id="h-sim">Simulate events</h3>
+      <p class="note">Weather changes only when the evidence changes. Clearing an effect never clears the record behind it.</p>
+      <div class="ctl">
+        <button type="button" data-sim="approve">Approve the Etsy listing draft</button>
+        <button type="button" data-sim="fix">Fix the Canva sign-in (Etsy)</button>
+        <button type="button" data-sim="fail">Two blocking failures on Etsy</button>
+        <button type="button" data-sim="data">Restore TELEMETRY data</button>
+        <button type="button" data-sim="handoff">Send a research packet to Etsy</button>
+        <button type="button" data-sim="reset">Reset</button>
+        <label><input type="checkbox" id="calm"> Reduced motion (reloads the fleet)</label>
+      </div>
+    </section>
+  </aside>
+</div>
+<script src="fleet-model.js"></script>
+<script src="fleet-art.js"></script>
+<script src="fleet-fixture.js"></script>
+<script src="fleet.js"></script>
+<script>
+'use strict';
+const FX = window.GrittyFleetFixture;
+let evidence = FX.evidence(Date.now());
+const NAMES = Object.fromEntries(FX.roster.map(a => [a.agentId, a.name]));
+const DEPTS = Object.fromEntries(FX.departments.map(d => [d.id, d.name]));
+const MEANING = {
+  'GrittyOS.open': a => DEPTS[a[0]] + ' ship dashboard (overview tab)',
+  'GrittyOS.openAgent': a => NAMES[a[0]] + ' workboard',
+  'GrittyOS.openWork': a => DEPTS[a[0]] + ' workflow map',
+  'GrittyOS.openOutputs': a => DEPTS[a[0]] + ' output vault',
+  'StationUI.showAgent': a => NAMES[a[0]] + ' dossier, ' + ({ brief: 'Overview', character: 'Character', config: 'Operations lane' }[a[1]] || a[1])
+};
+const logEl = document.getElementById('log');
+function logCall(fn, args) {
+  if (logEl.firstElementChild && !logEl.firstElementChild.querySelector('code')) logEl.innerHTML = '';
+  const li = document.createElement('li');
+  li.innerHTML = '<code></code><span></span>';
+  li.querySelector('code').textContent = fn + '(' + args.map(a => JSON.stringify(a)).join(', ') + ')';
+  li.querySelector('span').textContent = 'In GRITTY OS: ' + (MEANING[fn] ? MEANING[fn](args) : fn);
+  logEl.prepend(li);
+}
+// Stand-in host: same names as the real in-app entry points listed in the shared handoff.
+const host = {
+  GrittyOS: {
+    open: d => logCall('GrittyOS.open', [d]), openAgent: id => logCall('GrittyOS.openAgent', [id]),
+    openWork: d => logCall('GrittyOS.openWork', [d]), openOutputs: d => logCall('GrittyOS.openOutputs', [d])
+  },
+  StationUI: { showAgent: (id, lane) => logCall('StationUI.showAgent', [id, lane]) }
+};
+let fleet;
+function start(reducedMotion) {
+  if (fleet) fleet.destroy();
+  fleet = GrittyFleet.mount(document.getElementById('fleet'), {
+    host, crewChoice: 'ask', reducedMotion,
+    getInput: () => ({ departments: FX.departments, roster: FX.roster, conveyors: FX.conveyors, evidence })
+  });
+  const deep = location.hash.replace('#', '');
+  if (deep && FX.departments.some(d => d.id === deep)) fleet.showShip(deep);
+}
+const resolve = id => { evidence = evidence.map(e => e.id === id ? { ...e, state: 'resolved' } : e); };
+let seq = 0;
+document.querySelector('.ctl').addEventListener('click', e => {
+  const b = e.target.closest('button[data-sim]'); if (!b) return;
+  const t = Date.now();
+  ({
+    approve: () => { resolve('ap-1'); FX.roster.find(a => a.agentId === 'copywriter').status = 'idle'; },
+    fix: () => { resolve('f-7'); FX.roster.find(a => a.agentId === 'publisher').status = 'idle'; },
+    fail: () => { evidence.push({ id: 'f-x' + (++seq), kind: 'failure', deptId: 'etsy', state: 'open', blocking: true, at: t, label: 'Simulated blocking failure' },
+      { id: 'f-y' + seq, kind: 'failure', deptId: 'etsy', state: 'open', blocking: true, at: t, label: 'Simulated blocking failure' }); },
+    data: () => { resolve('d-1'); FX.roster.find(a => a.agentId === 'harvester').status = 'idle'; },
+    handoff: () => { evidence.push({ id: 'h-n' + (++seq), kind: 'handoff', from: 'operations', to: 'etsy', state: 'open', at: t, label: 'Research packet' }); },
+    reset: () => location.reload()
+  })[b.dataset.sim]();
+  fleet.refresh();
+});
+document.getElementById('calm').addEventListener('change', e => start(e.target.checked));
+start(undefined);
+</script>
+</body>
+</html>
