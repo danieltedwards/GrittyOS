@@ -15,8 +15,10 @@ From: Claude (cloud session on the upstream fork). For: Codex and Dan, working i
 | File | Role | Ship to the app? |
 | --- | --- | --- |
 | `fleet/fleet-model.js` | Pure logic: evidence → sea state, handoff ropes, fleet assembly, click → entry-point mapping, effect pacing | Yes |
-| `fleet/fleet-art.js` | Placeholder pixel art generated in code (palette, crew, Admiral, ships, props) | Yes, until real sprite sheets replace it |
-| `fleet/fleet.js` | Canvas renderer + button layer for the fleet and the cutaways | Yes |
+| `fleet/fleet-pixel.js` | Pixel toolkit: colour ramps, dithering, noise, outlines, a pixel buffer | Yes |
+| `fleet/fleet-art.js` | Sprite and prop library drawn in code: crew (per-agent looks and role tools), the Admiral, ~30 props, ships, trees, clouds | Yes, until hand-made sprite sheets replace pieces of it |
+| `fleet/fleet-scenes.js` | The harbour and cutaway scenes at 640×360: baked layers, reflections, parallax sky, light pass | Yes |
+| `fleet/fleet.js` | Controller: views, click layer, crew chooser, narrow-screen list | Yes |
 | `fleet/fleet.css` | Styles, all scoped under `.gf` | Yes |
 | `fleet/fleet-fixture.js` | Simulated data for the preview | **No, never** |
 | `fleet/fleet-preview.html` | Standalone preview with a stand-in host | No |
@@ -63,8 +65,8 @@ needed. There is no sound at all. Reduced motion stops all movement and keeps th
 
 ## How to wire it into the PC app (proposed steps for Codex)
 
-1. Copy the four "ship it" files to `frontend/app/gritty-fleet/`. The packaged app 404s anything outside `frontend/`.
-2. In `frontend/index.html`, load `gritty-fleet/fleet.css`, then `fleet-model.js`, `fleet-art.js`, `fleet.js`,
+1. Copy the six "ship it" files to `frontend/app/gritty-fleet/`. The packaged app 404s anything outside `frontend/`.
+2. In `frontend/index.html`, load `gritty-fleet/fleet.css`, then `fleet-model.js`, `fleet-pixel.js`, `fleet-art.js`, `fleet-scenes.js`, `fleet.js`,
    **after** `gritty-os.js` and `stationui.js`.
 3. Write `frontend/app/gritty-fleet/fleet-source.js`, the one PC-specific file. Its job is
    `getInput()` returning `{ departments, roster, conveyors, evidence }` from `gritty-os-model.js` and
@@ -112,9 +114,23 @@ the shared handoff. The preview's side panel logs the call that would be made in
 
 ## Art
 
-All art is generated in code at 480×270 logical pixels. It is original, with no upstream or third-party assets.
-Each builder in `fleet-art.js` returns a canvas, so hand-made sprite sheets can replace them one by one. Dan's
-existing 15 avatars are **not** used yet: the crew are generic pirates in department colours. Mapping the
-established avatars onto crew sprites is the next art decision. The entertainment game can reuse
-`fleet-art.js` and `fleet.js` with its own simulated `getInput()`. It must never receive the PC's
-`fleet-source.js` or any credentials.
+Everything is drawn in code at 640×360 logical pixels and is original, with no upstream or third-party assets. The direction is
+FAR: Lone Sails weathering, with the techniques from Dan's references (Owlboy, Barotrauma):
+- hue-shifted colour ramps, dithering and 1px outlines
+- a light pass in which real lights cut through ambient darkness
+- reflections, and a parallax sky with far sea stacks and clouds
+
+Light carries status:
+- A laid-up ship is dark.
+- Each crew member's station lamp is lit only while they are active, and brighter while running.
+- The stack smokes only while someone aboard is running.
+
+Each builder in `fleet-art.js` returns a canvas, so hand-made sprite sheets can replace pieces one at a time.
+That is the route to the last stretch of quality.
+
+Dan's existing 15 avatars are **not** used yet. Crew get their look (skin, hat, coat, beard) from their agent ID
+and hold a tool from their role, such as a brush, quill, coin, book, spyglass or map. Mapping the established
+avatars onto crew sprites is the next art decision.
+
+The entertainment game can reuse the art and scenes with its own simulated `getInput()`. It must never receive
+the PC's `fleet-source.js` or any credentials.
