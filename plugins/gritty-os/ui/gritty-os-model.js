@@ -31,9 +31,11 @@
   interrupted:'interrupted',empty:'empty result',
   max_iters:'blocked',max_turns:'blocked',budget:'blocked',budget_exceeded:'blocked',blocked:'blocked',
   clarifying:'waiting-input',waiting:'waiting-input','waiting-input':'waiting-input','waiting-review':'waiting-review','waiting-approval':'waiting-approval',
-  queued:'queued',ready:'ready',running:'running',pending:'pending review'
+  queued:'queued',ready:'ready',running:'running',pending:'pending review','needs-review':'needs owner review',
+  // an output's `produced` only means files were recorded: not a completion verdict, not owner approval
+  produced:'files recorded'
  };
- const TONES={completed:'ok',kept:'ok',failed:'bad',refused:'bad',interrupted:'bad',blocked:'gold','empty result':'gold','waiting-input':'gold','waiting-review':'gold','waiting-approval':'gold','pending review':'gold',running:'',queued:'',ready:''};
+ const TONES={completed:'ok',kept:'ok',failed:'bad',refused:'bad',interrupted:'bad',blocked:'gold','empty result':'gold','waiting-input':'gold','waiting-review':'gold','waiting-approval':'gold','pending review':'gold','needs owner review':'gold',running:'',queued:'',ready:''};
  function state(row){
   const raw=String(row?.status||row?.reason||row?.state||'').toLowerCase();
   return STATES[raw]||(when(row)&&row?.endedAt?'finished, outcome unclassified':raw?raw:'unknown');
@@ -64,16 +66,30 @@
   const present=new Set((snapshot.agents||[]).map(agentIdOf));
   const missing=unmapped?[]:d.agents.filter(id=>!present.has(id));   // listed here, but no such agent in the save
   const unassigned=(snapshot.runs||[]).filter(r=>belongs(r)&&!businessOf(r)).length;
+  const agentIds=new Set(agents.map(agentIdOf));
+  const schedules=((snapshot.cron&&snapshot.cron.jobs)||[]).filter(j=>j&&(belongs(j)||(j.runsLine&&onLine({line:j.runsLine}))));
+  const lineStats=((snapshot.lineStats&&snapshot.lineStats.lines)||[]).filter(l=>onLine({line:l.lineId}));
   const latest=new Map();for(const r of runs)if(!latest.has(r.agentId))latest.set(r.agentId,r);
-  return{department:d,businesses:businesses.filter(b=>b.departmentId===d.id),runs,jobs,outputs,agents,missing,latest,cost:usd(runs),spend:spend(runs,snapshot.at||Date.now()),unassigned,metrics:{revenue:null,orders:null},failures:runs.filter(isFailure)};
+  return{department:d,businesses:businesses.filter(b=>b.departmentId===d.id),runs,jobs,outputs,agents:agents.sort((a,b)=>isLead(agentIdOf(b))-isLead(agentIdOf(a))),agentIds,schedules,lineStats,missing,latest,cost:usd(runs),spend:spend(runs,snapshot.at||Date.now()),unassigned,metrics:{revenue:null,orders:null},failures:runs.filter(isFailure)};
  }
  // the Unmapped tab only shows up when something actually falls outside every department
  function hasUnmapped(snapshot){const s=scope(snapshot,UNMAPPED.id,'');return!!(s.agents.length||s.runs.length||s.jobs.length);}
+
+ // carried over from the built-in GRITTY OS (source recovery package, October 27, 2026)
+ const leads=['agent','chief','drafter','service-lead','video-lead'];
+ function isLead(id){return leads.includes(id);}
+ function agentDepartment(id){return departments.find(d=>d.agents.includes(id))||null;}
+ function matches(record,query){if(!query)return true;return[record.name,record.title,record.sessionTitle,record.id,record.runId,record.agentId,record.line,...(record.files||[]).map(f=>f.path)].join(' ').toLowerCase().includes(String(query).toLowerCase());}
+ function previewKind(file){const name=String(file?.path||'');if(file?.preview==='image'||/\.(png|jpe?g|webp|gif|avif|bmp|svg)$/i.test(name))return'image';if(file?.preview==='markdown'||/\.md$/i.test(name))return'markdown';if(file?.preview==='csv'||/\.csv$/i.test(name))return'csv';if(/\.(txt|json|log|html?|css|js)$/i.test(name))return'text';return'file';}
+ function outputKind(output){const files=output?.files||[];if(files.some(f=>/\.(zip|7z|tar|gz)$/i.test(f.path||'')))return'Packages';if(files.some(f=>previewKind(f)==='image'))return'Visuals';if(files.some(f=>/\.(csv|xlsx?|json)$/i.test(f.path||'')))return'Data';return'Documents';}
+ const OUTPUT_KINDS=['Visuals','Documents','Data','Packages'];
+ function outputOrigin(o){if(o?.source==='local-review')return o.provenance==='starnet-workflow'?'StarNet workflow review':'Local review artifact';if(o?.source==='workflow')return'Workflow record';if(o?.source==='workshop')return'Workshop build';if(o?.source==='run')return'Agent-run record';return o?.source?String(o.source):'Origin not classified';}
+ function scheduleState(j){if(!j)return'unknown';if(j.inFlight)return'running';if(j.enabled===false||j.state==='paused')return'paused';if(j.state==='error'||j.lastStatus==='error')return'failed';if(j.state==='completed')return'completed';return'scheduled';}
 
  function safeFile(url){if(typeof url!=='string'||!url.startsWith('/')||url.startsWith('//')||url.includes('\\'))return false;try{const u=new URL(url,'http://local');return u.origin==='http://local'&&(u.pathname==='/api/file'||u.pathname.startsWith('/workshop-run/'));}catch{return false;}}
  function safeLink(url){try{return new URL(url).protocol==='https:';}catch{return false;}}
  function money(n){return n==null||!Number.isFinite(n)?'Unknown':'$'+n.toFixed(2);}
  function ago(t,now){if(!t)return'never';const s=Math.max(0,Math.round((now-t)/1000));if(s<60)return s+'s ago';const m=Math.round(s/60);if(m<60)return m+'m ago';const h=Math.round(m/60);if(h<48)return h+'h ago';return Math.round(h/24)+'d ago';}
 
- return{departments,UNMAPPED,businesses,department,roomDepartment,businessOf,agentIdOf,when,state,tone,isFailure,usd,spend,scope,hasUnmapped,safeFile,safeLink,money,ago,DAY};
+ return{leads,isLead,agentDepartment,matches,previewKind,outputKind,OUTPUT_KINDS,outputOrigin,scheduleState,departments,UNMAPPED,businesses,department,roomDepartment,businessOf,agentIdOf,when,state,tone,isFailure,usd,spend,scope,hasUnmapped,safeFile,safeLink,money,ago,DAY};
 });

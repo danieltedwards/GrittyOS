@@ -49,3 +49,18 @@ assert.ok(M.safeFile('/api/file?p=x') && M.safeFile('/workshop-run/a/b/c.png'));
 assert.ok(!M.safeFile('//evil/api/file') && !M.safeFile('https://x/api/file') && !M.safeFile('/api/save'));
 assert.ok(M.safeLink('https://www.etsy.com/shop/x') && !M.safeLink('javascript:alert(1)'));
 console.log('gritty-os model: ok');
+
+// carried over from the built-in version: leads first, output kinds, search, schedules and line stats per department
+const s2 = M.scope({ ...snapshot,
+  agents: [{ id: 'writer' }, { id: 'chief' }],
+  outputs: [{ id: 'o1', agentId: 'chief', files: [{ path: 'art/cover.PNG' }] }, { id: 'o2', agentId: 'chief', files: [{ path: 'sales.csv' }] }],
+  cron: { jobs: [{ id: 'c1', agentId: 'chief', enabled: true }, { id: 'c2', agentId: 'designer' }, { id: 'c3', runsLine: 'p286' }] },
+  lineStats: { lines: [{ lineId: 'p286' }, { lineId: 'p343' }] } }, 'operations', '');
+assert.deepStrictEqual(s2.agents.map((a) => a.id), ['chief', 'writer']);
+assert.deepStrictEqual(s2.outputs.map(M.outputKind).sort(), ['Data', 'Visuals']);
+assert.deepStrictEqual(s2.schedules.map((j) => j.id), ['c1', 'c3']);
+assert.deepStrictEqual(s2.lineStats.map((l) => l.lineId), ['p286']);
+assert.ok(M.matches({ files: [{ path: 'art/cover.PNG' }] }, 'cover') && !M.matches({ title: 'x' }, 'cover'));
+assert.strictEqual(M.scheduleState({ enabled: false }), 'paused');
+assert.strictEqual(M.state({ status: 'produced' }), 'files recorded');
+console.log('gritty-os model (carried-over features): ok');
