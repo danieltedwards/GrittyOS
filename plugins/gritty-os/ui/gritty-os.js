@@ -48,7 +48,6 @@
       jobs: () => get('/api/line-jobs?limit=100'),
       outputs: () => get('/api/deliverables?limit=100'),
       budget: () => get('/api/budget/status'),
-      providers: () => get('/api/providers'),
       cron: () => get('/api/cron'),
       lineStats: () => get(`/api/routing/lines/stats?since=${new Date().setHours(0, 0, 0, 0)}`)
     };
@@ -64,7 +63,7 @@
       agents: doc?.agents || [], station: doc?.station,
       runs: raw.runs.data?.runs || [], runSourceAvailable: !raw.runs.error, truncated: !!raw.runs.data?.truncated,
       jobs: raw.jobs.data?.jobs || [], outputs: raw.outputs.data?.items || [],
-      budget: raw.budget.data, providers: raw.providers.data?.providers || [], cron: raw.cron.data || null, lineStats: raw.lineStats.data || null,
+      budget: raw.budget.data, cron: raw.cron.data || null, lineStats: raw.lineStats.data || null,
       errors, at: Date.now()
     };
     const y = window.scrollY;
@@ -139,12 +138,11 @@
         ${s.missing.length ? `<p class="gos-warn">${s.missing.length} of ${d.agents.length} listed agents not in this station</p>` : ''}
       </article>`;
     }
-    html += `</div><div class="sn-sect">Provider connections</div><div class="sn-row-flex">${snapshot.providers.filter((p) => p.configured).map((p) => `<span class="sn-badge ok">${esc(p.name || p.id)}</span>`).join('') || '<span class="sn-empty">None configured</span>'}</div>
-    <p class="sn-hint">A configured credential does not prove balance, entitlement or model quality. This window never starts an agent.</p>`;
+    html += '</div>';
     const cron = snapshot.cron;
     if (cron) {
       const jobs = cron.jobs || [], failing = jobs.filter((j) => M.scheduleState(j) === 'failed').length;
-      html += `<div class="sn-sect">Schedules</div><p>${jobs.length} routines · ${jobs.filter((j) => M.scheduleState(j) === 'scheduled').length} scheduled · <span class="${failing ? 'gos-bad' : ''}">${failing} failing</span> · scheduler ${cron.halted ? '<span class="gos-warn">paused by E-STOP</span>' : !cron.enabled ? '<span class="gos-warn">disarmed</span>' : cron.health?.healthy ? 'healthy' : '<span class="gos-warn">armed, no recent tick</span>'}</p>`;
+      html += `<div class="sn-sect">Schedules</div><p>${jobs.length} routines · ${jobs.filter((j) => M.scheduleState(j) === 'scheduled').length} scheduled · <span class="${failing ? 'gos-bad' : ''}">${failing} failing</span> ${typeof cron.enabled !== 'boolean' ? '' : ' · scheduler ' + (cron.halted ? '<span class="gos-warn">paused by E-STOP</span>' : !cron.enabled ? '<span class="gos-warn">disarmed</span>' : cron.health?.healthy ? 'healthy' : '<span class="gos-warn">armed, no recent tick</span>')}</p>`;
     }
     return html;
   }
@@ -186,8 +184,8 @@
       html += '<div class="sn-sect">Line watch · today</div>';
       html += `<table class="sn-table"><thead><tr><th>Line</th><th>Runs</th><th>Shipped</th><th>Failed</th><th>Spend (UTC day)</th></tr></thead><tbody>${s.lineStats.map((l) => {
         const pct = l.capUsdPerDay ? Math.min(100, (l.usdToday / l.capUsdPerDay) * 100) : null;
-        return `<tr><td class="sn-mono">${esc(l.lineId)}</td><td>${l.runs}</td><td>${l.shipped}</td><td class="${l.failed ? 'gos-bad' : ''}">${l.failed}</td>
-          <td>${M.money(l.usdToday)}${l.capUsdPerDay ? ' of ' + M.money(l.capUsdPerDay) + `<div class="sn-progress"><i style="width:${pct.toFixed(1)}%"></i></div>` : ' · no cap'}</td></tr>`;
+        return `<tr><td class="sn-mono">${esc(l.lineId)}</td><td>${l.runs}</td><td>${l.shipped ?? '—'}</td><td class="${l.failed ? 'gos-bad' : ''}">${l.failed}</td>
+          <td>${l.usdToday == null ? '—' : M.money(l.usdToday)}${l.capUsdPerDay && l.usdToday != null ? ' of ' + M.money(l.capUsdPerDay) + `<div class="sn-progress"><i style="width:${pct.toFixed(1)}%"></i></div>` : ''}</td></tr>`;
       }).join('')}</tbody></table>`;
     }
 
@@ -204,7 +202,7 @@
           <td><span class="sn-badge ${st === 'failed' ? 'bad' : st === 'paused' ? 'gold' : st === 'scheduled' ? 'ok' : ''}">${esc(st)}</span></td>
           <td class="sn-muted">${j.nextRunAt && st === 'scheduled' ? 'next ' + esc(stamp(Date.parse(j.nextRunAt) || j.nextRunAt)) : ''}${j.lastRunAt ? '<br>last ' + esc(M.ago(Date.parse(j.lastRunAt) || j.lastRunAt, now)) + (j.lastStatus ? ' · ' + esc(j.lastStatus) : '') : ''}</td></tr>`;
       }).join('')}</tbody></table>`;
-      if (snapshot.cron && (!snapshot.cron.enabled || snapshot.cron.halted)) html += `<p class="gos-warn">The scheduler is ${snapshot.cron.halted ? 'paused by E-STOP' : 'disarmed'}: these routines will not fire.</p>`;
+      if (snapshot.cron && (snapshot.cron.enabled === false || snapshot.cron.halted)) html += `<p class="gos-warn">The scheduler is ${snapshot.cron.halted ? 'paused by E-STOP' : 'disarmed'}: these routines will not fire.</p>`;
     }
 
     html += '<div class="sn-sect">Outputs</div>';

@@ -1,0 +1,14 @@
+{
+  "name": "GRITTY OS",
+  "version": "1.1.0",
+  "description": "Read-only department dashboards over existing local StarNet records. No agent runs, schedules, network requests or publishing.",
+  "main": "index.js",
+  "screens": [
+    {
+      "id": "main",
+      "title": "GRITTY OS",
+      "entry": "ui/index.html",
+      "size": "wide"
+    }
+  ]
+}
