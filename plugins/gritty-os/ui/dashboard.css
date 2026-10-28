@@ -1,0 +1,23 @@
+/* GRITTY OS: layout only. Colours, type and controls come from the station kit (sn-* classes, --ph tokens), so the
+   window follows the Commander's phosphor theme instead of a fixed palette. */
+#app { padding: var(--s-3) var(--s-4); display: flex; flex-direction: column; gap: var(--s-3); }
+.gos-bar { gap: var(--s-2); align-items: center; flex-wrap: wrap; }
+.sn-tabs { flex-wrap: wrap; }
+.sn-card h3 { margin: 0; }
+.sn-card p { margin: var(--s-1) 0 0; overflow-wrap: anywhere; }
+.gos-click { cursor: pointer; }
+.gos-click:hover { background: var(--gd-hover); }
+.gos-warn { color: var(--warn); }
+.gos-bad { color: var(--bad); }
+.sn-table { width: 100%; }
+.sn-table td { vertical-align: top; }
+.sn-table .sn-btn { text-align: left; white-space: normal; max-width: 42ch; }
+pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 46vh; overflow: auto; }
+.gos-preview { max-width: 100%; max-height: 55vh; object-fit: contain; display: block; margin-bottom: var(--s-2); }
+details summary { cursor: pointer; }
+@media (max-width: 640px) {
+  #app { padding: var(--s-2); }
+  .sn-table th:nth-child(n+4), .sn-table td:nth-child(n+4) { display: none; }
+}
+#app label { display: inline-flex; align-items: center; gap: var(--s-2); }
+#app label .sn-select { width: auto; }
