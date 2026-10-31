@@ -1,3 +1,0 @@
-User-agent: *
-Allow: /
-Sitemap: https://starnetos.com/sitemap.xml

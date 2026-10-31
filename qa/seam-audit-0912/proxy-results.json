@@ -1,9 +1,0 @@
-{
-  "reads": 13,
-  "controls": [
-    {
-      "id": "audit-loop",
-      "action": "pause"
-    }
-  ]
-}

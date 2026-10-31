@@ -1,177 +1,79 @@
-<div align="center">
+# Gritty Fit — personal fitness tracker
 
-<img src=".github/media/starnet-logo-glow.png" alt="StarNet" width="560">
+A phone-first web app for one person. No account, no server, no monthly bill.
+It installs to your home screen like a normal app and works offline.
 
-**A living pixel-art station where real AI agents do real work.**
+## What's in it
 
-[![Download](https://img.shields.io/github/v/release/androoAGI/starnet-releases?label=download&color=f5a623)](https://github.com/androoAGI/starnet-releases/releases/latest)
-[![Platforms](https://img.shields.io/badge/platform-Windows%20%7C%20macOS-4a90d9)](INSTALL.md)
-[![License: MIT](https://img.shields.io/badge/license-MIT-2ea44f)](LICENSE)
-[![Local-first](https://img.shields.io/badge/local--first-your%20machine%2C%20your%20data-8250df)](PRIVACY.md)
-
-[Download](https://github.com/androoAGI/starnet-releases/releases/latest) ·
-[Install guide](INSTALL.md) ·
-[Run from source](#run-from-source) ·
-[Docs](docs/INDEX.md) ·
-[Contributing](CONTRIBUTING.md)
-
-<img src=".github/media/station-iso.png" alt="The StarNet station — rooms, crew, and workstations rendered from live harness state" width="540">
-
-</div>
-
-StarNet is a local-first desktop harness where you create AI agents, organize them into a
-pixel-art space station, and watch them perform real work with real models and tools. The
-station is not decoration — it is a projection of live runtime state, and the product contract
-is literal: **A room is a capability-scoped team**, **a hallway is** an authorized handoff
-lane, and **a placed object is a real capability grant**.
-The layout you draw *is* the workflow the agents run.
-
-Start with one agent, then place bays or summon specialists to run **more, concurrently** —
-each a **genuinely distinct, bounded agent run** with its own workspace and permissions.
-The harness performs **real model calls, real tools, real cost** rather than animating a
-simulation.
-
-## Features
-
-| | |
+| Tab | What you do there |
 | --- | --- |
-| **A crew, not a chatbot** | Create agents with distinct classes, personas, and loadouts. Run several at once — each gets its own workspace, transcript, memory, and bounded permissions. |
-| **Bring your own models** | Paste an OpenRouter key, or sign in with supported provider accounts (Anthropic, OpenAI, Google) — keys live in the OS keychain, never in the frontend. |
-| **Message it from anywhere** | Wire agents to Telegram, Discord, Slack, Signal, or Matrix and talk to your station away from the desk. |
-| **Night Shift** | Leave the station running and agents keep working inside an explicit, adjustable leash — every away-action is logged and reviewable. |
-| **Recipes, skills, schedules** | Launch proven multi-step recipes, grant reusable skills, and put work on cron schedules with visible output. |
-| **Asks before it guesses** | Task Briefs turn ambiguity into one concrete question with options — over any connected channel — instead of a silent wrong guess. |
-| **Finished work has a front door** | Deliverables land in the OUTBOX as real files you open, not chat scrollback you archaeology. |
-| **MCP connectors** | Attach Model Context Protocol servers and paste-a-key/OAuth connectors to extend what agents can touch. |
-| **Voice** | Push-to-talk dictation in, one consistent station voice out. |
-| **Real ledgers** | Spend, budgets, and run history persist on disk and are shown as-is. |
+| **Today** | Dashboard: quick-add buttons, a backup reminder when one is due, your week-so-far score, daily accountability checklist (with streaks), calories vs. target, workouts this week, weight trend and distance to goal, active goals with countdowns, and a journal prompt. |
+| **Food** | Log calories and protein by meal, step back through previous days, re-add recent foods in one tap, 14-day calorie chart against your target. |
+| **Train** | Log workouts (type, minutes, effort, sets/exercises, notes), one-tap **Repeat** of a past session, workout days per week vs. your weekly target. **Lifts & PRs**: write sets like `Squat 5x5 @ 225` or `Bench 185x5` and the app tracks your best set and estimated 1-rep max per lift, charts it, and calls out new PRs when you save. |
+| **Body** | Weigh-ins plus body fat %, muscle mass, and tape measurements (waist, chest, hips, arm, thigh, neck), all with trend charts. **Progress photos**: take or upload, then tap any two to compare side by side with the weight on each date. |
+| **Goals → Week** | Weekly accountability review: a score for the week (calories on target, workouts vs. goal, habits, journal), weight change, PRs, your wins, and the "tomorrow I will…" commitments you made, so you can check yourself. Step back through past weeks. |
+| **Goals** | Daily journal check-in (mood, energy, hunger, one win, honest notes, tomorrow's commitment), goals with target dates and your "why", and the daily habits that drive the Today checklist. |
+| **⚙ Settings** | Name, lb/kg (switching converts existing entries), calorie/protein/workout targets (or **calculate them** from height, age, weight, activity and how fast you want to lose or gain), goal weight, **backup export/import**, erase. |
 
-## What is real
+## Where your data lives
 
-- Model calls stream through the local Node sidecar.
-- Tools operate through explicit capability and consent checks.
-- Agent memory, transcripts, spend records, tasks, and schedules persist on disk.
-- Multiple agents run concurrently with separate workspaces and bounded permissions.
-- The visual station projects the same runtime state the harness can prove.
+Everything is stored **only in your phone's browser** (IndexedDB). Nothing is uploaded anywhere.
+That keeps it free and private, but it has two consequences:
 
-StarNet does not simulate revenue, completed work, model activity, or spend. Its core product
-law is that **the interface must never assert state the harness cannot prove.**
+1. **Use one device.** Data doesn't sync between your phone and your laptop.
+2. **Export a backup now and then** (Settings → Export backup). If you clear Safari/Chrome
+   website data or lose the phone, the backup file is how you get your history back.
 
-## Download
+The app reminds you on the Today screen when you haven't backed up in two weeks.
 
-Desktop builds are published on the
-[StarNet releases page](https://github.com/androoAGI/starnet-releases/releases/latest).
+Photos are resized to about 1400 px before they're saved, so they don't take up much space.
 
-| Platform | Asset |
-| --- | --- |
-| **Windows** (10/11, 64-bit) | `StarNet_<version>_x64-setup.exe` |
-| **macOS — Apple Silicon** (M1 or later) | `StarNet_<version>_aarch64.dmg` |
-| **macOS — Intel** | `StarNet_<version>_x64.dmg` |
+## Put it on your phone (free)
 
-> **Apple Silicon note:** use the native `aarch64` DMG. Avoid the `x64` DMG on Apple Silicon:
-> it runs under Rosetta 2 rather than using the native architecture.
+It's a folder of static files (HTML, CSS, JS). Any free static host works. Pick one:
 
-The public release train supports Windows and macOS. It refuses to stage a release unless the
-Windows installer passes Authenticode and timestamp verification, both Mac builds pass
-Developer ID checks and Apple notarization, and every updater artifact has a valid updater
-signature. Those are pipeline requirements, not proof that a particular downloaded or installed
-copy was tested on your machine; [INSTALL.md](INSTALL.md) explains what to verify and when to stop.
-Linux packages are internal build artifacts only and are not a supported public release target.
+**Option A: Cloudflare Pages (recommended; free, no expiry)**
+1. Make a free account at <https://pages.cloudflare.com>.
+2. *Create a project → Direct Upload*, then drag this whole folder in.
+3. Open the `*.pages.dev` URL it gives you on your phone.
 
-> **Early release:** Windows is the most-tested desktop target. macOS has less real-world
-> coverage. Broken? Tell us:
-> **androo.agi@gmail.com**.
+**Option B: Netlify Drop**: drag this folder onto <https://app.netlify.com/drop>
+(sign up free so the site doesn't expire).
 
-## Run from source
+**Option C: GitHub Pages**: put these files in their own repo and enable Pages
+(Settings → Pages → Deploy from a branch → `/ (root)`). Public is fine: the code has no personal
+data in it, since your data never leaves your phone. (Pages on private repos needs a paid GitHub plan.)
 
-Requirements: Node.js 18+ (Node.js 22 matches CI), Git. Rust and the
-[Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) only for the desktop shell.
+Then **add it to your home screen**:
+- **iPhone (Safari):** Share button → *Add to Home Screen*.
+- **Android (Chrome):** ⋮ menu → *Install app* / *Add to Home screen*.
 
-The sidecar uses Node core modules only, so it runs without installing anything:
+It then opens full-screen with its own icon and keeps working without signal.
+
+> Use the same URL every time. Each web address has its own separate storage.
+
+## Run it locally
 
 ```bash
-git clone https://github.com/androoAGI/starnet.git
-cd starnet
-node sidecar/index.js
+python3 -m http.server 8080   # then open http://localhost:8080
 ```
 
-Open <http://localhost:8787>, then connect a provider —
-**bring your own OpenRouter API key (BYOK)** or use a supported OAuth sign-in. Provider requests leave your machine when you run an agent;
-station state, transcripts, memory, and ledgers stay in the local StarNet workspace unless you
-explicitly use a network tool or connector. See [PRIVACY.md](PRIVACY.md) for the full data map.
+## Updating the app
 
-### Run free with a local model
+After changing any file, bump `VERSION` in `sw.js` (e.g. `gritty-fit-v2`) and re-upload.
+Phones pick up the new version the next time the app opens with a connection. Your data is untouched.
 
-No key, no account, no bill: install [Ollama](https://ollama.com), pull a model
-(`ollama pull qwen3:8b`), and pick **OLLAMA** as the provider — on the first-run brain screen, or
-later in **SETTINGS → PROVIDERS**. StarNet talks to Ollama on `127.0.0.1:11434` and only reports
-it ready once it can list your local models. Pick a model that supports tools (`ollama show <model>`
-lists them): agents act through tool calls. Honest caveat: local models are smaller than the
-cloud ones, so expect slower and rougher work on long tasks, and a task needs a large context
-window — an 8B model takes about 10 GB of graphics memory while it works.
+## Files
 
-For desktop development:
-
-```bash
-npm ci
-npm run desktop:dev     # dev shell
-npm run desktop:build   # build installers locally
+```
+index.html            page shell + bottom tab bar
+app.css               styles (light + dark mode follow the phone setting)
+app.js                all screens, forms, and logic
+db.js                 on-device storage (IndexedDB)
+charts.js             small SVG charts (no libraries)
+sw.js                 offline cache
+manifest.webmanifest  install-to-home-screen metadata
+icon*.{svg,png}       app icons
 ```
 
-## Coming from OpenClaw or Hermes?
-
-StarNet can import an existing agent: point it at your on-disk OpenClaw or Hermes home and it
-mints a StarNet agent from the persona, instructions, memory, and model it finds. API keys
-never transfer — you re-enter those in the KEYS tab.
-
-## Architecture
-
-| Path | Responsibility |
-| --- | --- |
-| `frontend/` | Vanilla JavaScript station world and desktop UI. |
-| `sidecar/` | Local Node agent runtime: providers, tools, persistence, budgets, consent. |
-| `shared/` | Additive cross-boundary event and schema contracts. |
-| `src-tauri/` | Rust/Tauri desktop shell and bundled runtime. |
-| `test/` | Unit, contract, integration, and release gates. |
-| `qa/` | Live QA receipts, journeys, findings ledger, and release-readiness authority. |
-
-The frontend consumes real sidecar events over localhost HTTP/NDJSON and SSE. Secrets belong
-to the local authority:
-**Secrets are held by the sidecar / OS keychain, never in the frontend**.
-
-Start with [docs/INDEX.md](docs/INDEX.md) for the living documentation. Older planning
-documents remain in the repository as design history and are labeled accordingly.
-
-## Testing
-
-```bash
-npm run test:fast          # required merge gate
-npm run test:http          # live sidecar HTTP/E2E suite
-npm test                   # validation + world + fast + HTTP suites
-npm run security:secrets   # full-history secret scan; requires Gitleaks in PATH
-```
-
-The release aggregate is `npm run qa:ready`. It is candidate-bound: any new commit invalidates
-the prior READY receipt until the affected live gates are rerun.
-
-## Contributing and security
-
-Contributions are welcome — read [CONTRIBUTING.md](CONTRIBUTING.md) and follow the
-[Code of Conduct](CODE_OF_CONDUCT.md).
-
-Do not report vulnerabilities in a public issue. Follow [SECURITY.md](SECURITY.md) for private
-reporting instructions.
-
-## License
-
-StarNet is open source under the [MIT License](LICENSE). Third-party components remain
-under their original licenses — see [NOTICE.md](NOTICE.md).
-
-**The MIT License covers the code only.** The **StarNet** name, the logo, the station artwork
-and sprites, and the rest of the project's brand identity are owned by Andrew Sims and are
-**not** licensed with it — no trademark or other brand rights are granted, expressly or by
-implication.
-
-MIT means you may fork, modify, and redistribute the code, including commercially. What you
-may not do is ship it as StarNet: forks and derivatives must use their own name, logo, and
-artwork, and must not present themselves as this project or as endorsed by it.
+No build step and no dependencies.
